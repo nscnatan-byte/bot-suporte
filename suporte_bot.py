@@ -12,8 +12,6 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-
-import easyocr
 import json
 import os
 import glob
