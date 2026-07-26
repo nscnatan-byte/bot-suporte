@@ -3,8 +3,7 @@ import os
 import requests
 
 ARQUIVO_DADOS = "financeiro.json"
-PAGBANK_TOKEN = "vou cria outro tok:
-d831a01d-d2cf-4b6d-b0cc-5aa4dbd5b063b5b705694a92bd8c81a7f9896db7a74d3647-f8f9-425e-a622-c35a5557685b"
+PAGBANK_TOKEN = "d831a01d-d2cf-4b6d-b0cc-5aa4dbd5b063b5b705694a92bd8c81a7f9896db7a74d3647-f8f9-425e-a622-c35a5557685b"
 
 clientes = [
     {"usuario_id": 1, "email": "carlostenia1@gmail.com", "plano": "1 MÊS", "valor": 0, "historico": 10, "tipo": "pix"},
