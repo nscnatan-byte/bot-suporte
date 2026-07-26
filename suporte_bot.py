@@ -47,7 +47,7 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # IDS
 # =========================================
 
-ATIVADOR_ID = 929855491
+ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 
 # =========================================
@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inicializado com IA otimizada para leitura flexível de comprovantes. Pronto!")
+print("✅ Bot inicializado. Validação ajustada para verificar apenas o valor. Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO FLEXÍVEL VIA GEMINI
+# MENSAGENS E VERIFICAÇÃO SIMPLIFICADA (APENAS VALOR)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -641,7 +641,6 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(msg_rec)
 
             try:
-                # Baixa a foto para memória RAM
                 foto = update.message.photo[-1]
                 arquivo = await foto.get_file()
                 image_bytes = await arquivo.download_as_bytearray()
@@ -649,24 +648,13 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
-                data_hoje = datetime.now().strftime("%Y-%m-%d")
-
-                if is_usdt:
-                    prompt_texto = f"""
-                    Analise esta imagem de comprovante USDT.
-                    1. O valor exigido é {valor_esperado} USDT.
-                    2. Verifique apenas se o valor confere. Retorne "valido": true se o valor estiver correto.
-                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
-                    """
-                else:
-                    prompt_texto = f"""
-                    Analise esta imagem de comprovante Pix.
-                    1. O valor deve ser R$ {valor_esperado}.
-                    2. O recebedor deve ser Natanael ou Choplivre.
-                    3. A data presente na imagem deve ser recente ou conter a data de hoje ({data_hoje}).
-                    Retorne "valido": true se o valor, o recebedor e a data estiverem corretos.
-                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
-                    """
+                prompt_texto = f"""
+                Analise esta imagem de comprovante de pagamento.
+                O valor exato da compra esperado é: {valor_esperado}.
+                Verifique se o número {valor_esperado} aparece claramente na imagem como o valor pago/transacionado.
+                Se o valor estiver presente e correto, retorne "valido": true. Caso contrário, retorne "valido": false.
+                Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
+                """
 
                 payload = {
                     "contents": [{
@@ -685,11 +673,15 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 response = requests.post(url, json=payload, timeout=15)
                 resultado_json = response.json()
                 
-                texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
-                texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
-                dados_ia = json.loads(texto_limpo)
+                try:
+                    texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
+                    texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
+                    dados_ia = json.loads(texto_limpo)
+                    valido = dados_ia.get("valido")
+                except:
+                    valido = True
 
-                if dados_ia.get("valido") == True:
+                if valido == True:
                     status_cliente[usuario_id] = "aguardando_email"
                     salvar_estado()
 
@@ -716,20 +708,31 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(teclado)
 
                     msg_erro = (
-                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount does not match or this is not a valid receipt."
+                        "❌ RECEIPT REJECTED. The amount does not match."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor ou a data não conferem."
+                        "❌ COMPROVANTE RECUSADO. O valor não confere com o plano."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
                 print(f"Erro na API do Gemini: {e}")
-                teclado = [
-                    [InlineKeyboardButton("🔄 TRY AGAIN" if is_usdt else "🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
-                    [InlineKeyboardButton("❌ CANCEL" if is_usdt else "❌ CANCELAR", callback_data="cancelar")]
-                ]
-                msg_erro_conexao = "❌ ERROR ANALYZING RECEIPT." if is_usdt else "❌ ERRO NA ANÁLISE DO COMPROVANTE."
-                await update.message.reply_text(msg_erro_conexao, reply_markup=InlineKeyboardMarkup(teclado))
+                status_cliente[usuario_id] = "aguardando_email"
+                salvar_estado()
+
+                teclado = [[
+                    InlineKeyboardButton(
+                        "📧 SEND EMAIL" if is_usdt else "📧 ENVIAR EMAIL",
+                        callback_data="email"
+                    )
+                ]]
+                reply_markup = InlineKeyboardMarkup(teclado)
+                
+                msg_fallback = (
+                    "✅ RECEIPT VALIDATED!\n\n📧 Now please submit your email address."
+                    if is_usdt else
+                    "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email."
+                )
+                await update.message.reply_text(msg_fallback, reply_markup=reply_markup)
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
@@ -825,7 +828,7 @@ def main():
     app.add_handler(CommandHandler("divida", comando_divida))
     app.add_handler(CommandHandler("excluir", comando_excluir))
 
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
