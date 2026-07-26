@@ -1,6 +1,11 @@
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import os
+from datetime import datetime
+import requests
 
+# Servidor HTTP falso para manter o Render acordado na porta 10000
 def run_fake_server():
     class SimpleHandler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -14,6 +19,7 @@ def run_fake_server():
     server.serve_forever()
 
 threading.Thread(target=run_fake_server, daemon=True).start()
+
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -33,7 +39,7 @@ from telegram.ext import (
 # TOKEN E CONFIGURAÇÕES
 # =========================================
 
-TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
+TOKEN = "8568503789:AAHN9s3p7YhTIlGEwQeBXo7D5TDGamw6mLE"
 
 ATIVADOR_ID = 929855491
 DONO_ID = 674527541
@@ -326,7 +332,12 @@ async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Use:\n/excluir email@gmail.com")
 
 def main():
-    print("BOT ONLINE COM NOVO TOKEN")
+    print("BOT ONLINE COM LIMPEZA DE SESSÃO")
+    try:
+        requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=True")
+    except:
+        pass
+
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", menu))
