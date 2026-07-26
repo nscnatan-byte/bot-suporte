@@ -186,23 +186,27 @@ def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.co
     }
     
     response = requests.post(url, json=payload, headers=headers)
+    print("RESPOSTA COMPLETA DO PAGBANK:", response.text)
     
     if response.status_code == 201:
         dados = response.json()
         order_id = dados.get("id")
-        pix_texto = None
         
+        pix_texto = None
         try:
-            # Procura o texto do Pix (Copia e Cola) na resposta da API v4
-            if "qr_codes" in dados and len(dados["qr_codes"]) > 0:
-                pix_texto = dados["qr_codes"][0].get("text")
+            charges = dados.get("charges", [])
+            if charges and "qr_codes" in charges[0]:
+                pix_texto = charges[0]["qr_codes"][0].get("text") or charges[0]["qr_codes"][0].get("links", [{}])[0].get("href")
             
-            if not pix_texto and "charges" in dados and len(dados["charges"]) > 0:
-                charge = dados["charges"][0]
-                if "qr_codes" in charge and len(charge["qr_codes"]) > 0:
-                    pix_texto = charge["qr_codes"][0].get("text")
+            if not pix_texto and "qr_codes" in dados:
+                pix_texto = dados["qr_codes"][0].get("text") or dados["qr_codes"][0].get("links", [{}])[0].get("href")
+                
+            if not pix_texto and "links" in dados:
+                for link in dados["links"]:
+                    if "qr_code" in link.get("rel", ""):
+                        pix_texto = link.get("href")
         except Exception as e:
-            print("Erro ao extrair string do Pix:", e)
+            print("Erro ao parsear Pix:", e)
             
         return order_id, pix_texto
     else:
