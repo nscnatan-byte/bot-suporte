@@ -5,42 +5,17 @@ import os
 from datetime import datetime
 import requests
 
-# Estado global para armazenar pagamentos pendentes e confirmados via Webhook
-pagamentos_webhook = {}
-
-# Servidor HTTP aprimorado para manter o Render acordado E receber o Webhook do PagBank
+# Servidor HTTP para manter o Render acordado na porta 10000
 def run_fake_server():
-    class WebhookHandler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
-            try:
-                dados_evento = json.loads(post_data.decode('utf-8'))
-                # Captura dados do pedido do PagBank
-                reference_id = dados_evento.get("reference_id")
-                charges = dados_evento.get("charges", [])
-                for charge in charges:
-                    status = charge.get("status")
-                    if status == "PAID" and reference_id:
-                        pagamentos_webhook[reference_id] = "APROVADO"
-                
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"Webhook received successfully!")
-            except Exception as e:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(f"Error: {str(e)}".encode('utf-8'))
-
+    class SimpleHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Bot is alive and Webhook is active!")
-
+            self.wfile.write(b"Bot is alive!")
         def log_message(self, format, *args):
             return
 
-    server = HTTPServer(("0.0.0.0", 10000), WebhookHandler)
+    server = HTTPServer(("0.0.0.0", 10000), SimpleHandler)
     server.serve_forever()
 
 threading.Thread(target=run_fake_server, daemon=True).start()
@@ -65,7 +40,6 @@ from telegram.ext import (
 # =========================================
 
 TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
-TOKEN_PAGBANK = "d831a01d-d2cf-4b6d-b0cc-5aa4dbd5b063b5b705694a92bd8c81a7f9896db7a74d3647-f8f9-425e-a622-c35a5557685b"
 
 ATIVADOR_ID = 929855491
 DONO_ID = 674527541
@@ -109,55 +83,6 @@ TABELA_DESCONTO_USDT = {
 }
 
 # =========================================
-# INTEGRAÇÃO PAGBANK API COM REF_ID
-# =========================================
-def gerar_pix_pagbank(valor_reais):
-    url = "https://api.pagseguro.com/orders"
-    headers = {
-        "Authorization": f"Bearer {TOKEN_PAGBANK}",
-        "Content-Type": "application/json",
-        "accept": "application/json"
-    }
-    
-    valor_centavos = int(float(valor_reais) * 100)
-    ref_id = f"pedido_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-    
-    payload = {
-        "reference_id": ref_id,
-        "customer": {
-            "email": "cliente@xbot.com",
-            "name": "Cliente XBot",
-            "tax_id": "00000000000"
-        },
-        "items": [
-            {
-                "name": "Assinatura XBot",
-                "quantity": 1,
-                "unit_amount": valor_centavos
-            }
-        ],
-        "qr_codes": [
-            {
-                "amount": {
-                    "value": valor_centavos
-                },
-                "expiration_date": "2026-12-31T23:59:59-03:00"
-            }
-        ]
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=payload)
-        if response.status_code == 201:
-            dados_resposta = response.json()
-            for qr in dados_resposta.get("qr_codes", []):
-                qr_text = qr.get("text")
-                return {"sucesso": True, "copia_e_cola": qr_text, "reference_id": ref_id}
-        return {"sucesso": False, "erro": response.text}
-    except Exception as e:
-        return {"sucesso": False, "erro": str(e)}
-
-# =========================================
 # HANDLERS DO BOT
 # =========================================
 
@@ -169,10 +94,12 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     if usuario_id not in clientes:
-        clientes[usuario_id] = {"valor": "20", "plano": "TESTE", "tipo": "pix"}
-    status_cliente[usuario_id] = "aguardando_email_pos_pagamento"
+        clientes[usuario_id] = {"valor": "0", "plano": "TESTE", "tipo": "pix"}
+    status_cliente[usuario_id] = "aguardando_email"
     salvar_estado()
-    await update.message.reply_text("✅ TESTE LIBERADO.\n\n📧 Envie seu email para simular ativação.")
+    teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
+    reply_markup = InlineKeyboardMarkup(teclado)
+    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.", reply_markup=reply_markup)
 
 async def comando_financeiro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id not in [DONO_ID, ATIVADOR_ID]:
@@ -306,48 +233,30 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("plano_"):
         valor = query.data.replace("plano_", "")
         planos = {"20": "1 MÊS", "38": "2 MESES", "54": "3 MESES", "68": "4 MESES", "80": "5 MESES", "90": "6 MESES", "162": "1 ANO"}
-        
-        await query.message.reply_text("⏳ Gerando Pix automático na API do PagBank...")
-        
-        resultado = gerar_pix_pagbank(valor)
-        
-        if resultado["sucesso"]:
-            ref_id = resultado["reference_id"]
-            clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ref_id": ref_id, "ativado": False}
-            status_cliente[usuario_id] = "aguardando_pagamento_webhook"
-            salvar_estado()
-            
-            copia_e_cola = resultado["copia_e_cola"]
-            await query.message.reply_text(
-                f"💳 **PIX GERADO COM SUCESSO!**\n\n"
-                f"📦 Plano: {planos[valor]} (R$ {valor})\n\n"
-                f"Copie o código Pix abaixo:\n\n"
-                f"`{copia_e_cola}`\n\n"
-                f"⏳ **Aguardando confirmação automática do pagamento...** Assim que pagar, o bot liberará para você enviar seu e-mail.",
-                parse_mode="Markdown"
-            )
-        else:
-            # Caso caia na restrição de IP do PagBank, avisa e orienta a usar o modo manual com chave Pix direta
-            await query.message.reply_text(
-                f"⚠️ O PagBank bloqueou a geração automática por restrição de IP do servidor.\n\n"
-                f"💳 **PAGAMENTO PIX MANUAL:**\n"
-                f"Valor: R${valor}\n"
-                f"Chave Pix: `choplivre@gmail.com`\n"
-                f"Nome: Natanael S Castro\n\n"
-                f"📧 Após pagar, envie seu e-mail aqui no chat:",
-                parse_mode="Markdown"
-            )
-            clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
-            status_cliente[usuario_id] = "aguardando_email_pos_pagamento"
-            salvar_estado()
+        clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
+        status_cliente[usuario_id] = "aguardando_email"
+        salvar_estado()
+        await query.message.reply_text(
+            f"💳 **PAGAMENTO PIX**\n\n"
+            f"💰 Valor: R${valor}\n\n"
+            f"PIX:\n`choplivre@gmail.com`\n\n"
+            f"👤 Natanael S Castro\n\n"
+            f"📧 Após pagar, envie seu e-mail de acesso abaixo:", 
+            parse_mode="Markdown"
+        )
 
     elif query.data.startswith("usdt_"):
         valor_usdt = query.data.replace("usdt_", "")
         planos_usdt = {"4": "1 MONTH (USDT)", "7.60": "2 MONTHS (USDT)", "10.80": "3 MONTHS (USDT)", "13.60": "4 MONTHS (USDT)", "16": "5 MONTHS (USDT)", "18": "6 MONTHS (USDT)", "32.40": "1 YEAR (USDT)"}
         clientes[usuario_id] = {"valor": valor_usdt, "plano": planos_usdt[valor_usdt], "tipo": "usdt", "ativado": False}
-        status_cliente[usuario_id] = "aguardando_email_pos_pagamento"
+        status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
         await query.message.reply_text(f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please send your email address below:", parse_mode="Markdown")
+
+    elif query.data == "email":
+        status_cliente[usuario_id] = "aguardando_email"
+        salvar_estado()
+        await query.message.reply_text("📧 Digite seu email:")
 
     elif query.data.startswith("ativar_"):
         try:
@@ -384,25 +293,11 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as erro:
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
-# Função periódica para verificar se o Webhook aprovou o pagamento
-async def verificar_pagamentos_pendentes(context: ContextTypes.DEFAULT_TYPE):
-    for usuario_id, dados in list(clientes.items()):
-        if status_cliente.get(usuario_id) == "aguardando_pagamento_webhook":
-            ref_id = dados.get("ref_id")
-            if ref_id and pagamentos_webhook.get(ref_id) == "APROVADO":
-                status_cliente[usuario_id] = "aguardando_email_pos_pagamento"
-                salvar_estado()
-                await context.bot.send_message(
-                    chat_id=usuario_id,
-                    text="🎉 **PAGAMENTO APROVADO COM SUCESSO!**\n\n📧 Agora por favor, envie o seu **e-mail** aqui no chat para liberar o acesso:",
-                    parse_mode="Markdown"
-                )
-
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     status = status_cliente.get(usuario_id)
 
-    if status == "aguardando_email_pos_pagamento":
+    if status == "aguardando_email":
         email = str(update.message.text).strip()
         if "@" in email and ".com" in email:
             dados = clientes.get(usuario_id, {})
@@ -419,10 +314,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             moeda = "USDT" if dados.get('tipo') == "usdt" else "R$"
             await context.bot.send_message(
                 chat_id=ATIVADOR_ID,
-                text=f"💳 **PAGAMENTO CONFIRMADO / NOVO E-MAIL**\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
+                text=f"📧 NOVO EMAIL\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
                 reply_markup=reply_markup
             )
-            await update.message.reply_text("✅ E-mail recebido com sucesso!\n\n⏳ O ativador já foi avisado e vai liberar sua conta em instantes.")
+            await update.message.reply_text("✅ Email recebido.\n\n⏳ Aguarde a ativação.")
 
 async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
@@ -444,17 +339,13 @@ async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Use:\n/excluir email@gmail.com")
 
 def main():
-    print("BOT ONLINE COM WEBHOOK PAGBANK")
+    print("BOT ONLINE COM SUCESSO")
     try:
         requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=True")
     except:
         pass
 
     app = Application.builder().token(TOKEN).build()
-
-    # Adiciona job para checar o webhook a cada 5 segundos
-    job_queue = app.job_queue
-    job_queue.run_repeating(verificar_pagamentos_pendentes, interval=5.0, first=5.0)
 
     app.add_handler(CommandHandler("start", menu))
     app.add_handler(CommandHandler("4JAB4515", teste))
