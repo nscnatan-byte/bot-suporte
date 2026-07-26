@@ -1,4 +1,2 @@
 python-telegram-bot
-easyocr
 requests
-google-generativeai
