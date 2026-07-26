@@ -40,7 +40,6 @@ from telegram.ext import (
 # TOKENS E IDS
 # =========================================
 TOKEN_PAGAMENTO = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
-TOKEN_SUPORTE = "8810903311:AAF5Kwav8KvySPcb0eIrj-2hmagCKAOqYvw" # Caso use tokens diferentes, atente-se. Se for o mesmo bot, use o mesmo token.
 
 GRUPO_PRINCIPAL = -1002260588784
 GRUPO_SUPORTE = -1003985207456
