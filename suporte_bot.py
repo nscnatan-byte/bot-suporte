@@ -6,7 +6,7 @@ def run_fake_server():
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Support Bot is alive!")
+            self.wfile.write(b"Bot is alive!")
         def log_message(self, format, *args):
             return
 
@@ -15,45 +15,46 @@ def run_fake_server():
 
 threading.Thread(target=run_fake_server, daemon=True).start()
 
-from telegram import Update
+import json
+import os
+import time
+import re
+from datetime import datetime
+
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     MessageHandler,
+    CommandHandler,
     ContextTypes,
     filters
 )
 
-# =====================================
-# TOKEN
-# =====================================
-
+# =========================================
+# TOKEN E CONFIGURAÇÕES
+# =========================================
+# Usaremos o token do bot de suporte para gerenciar tudo unificado
 TOKEN = "8810903311:AAF5Kwav8KvySPcb0eIrj-2hmagCKAOqYvw"
 
-# =====================================
-# IDS
-# =====================================
-
 GRUPO_PRINCIPAL = -1002260588784
-
 GRUPO_SUPORTE = -1003985207456
-
-# =====================================
-# TOPICO
-# =====================================
-
 TOPICO_ID = 19
+ATIVADOR_ID = 674527541
+DONO_ID = 674527541
+BOT_PRIVADO = "https://t.me/suporte_xbotbot"
 
-# =====================================
-# CACHE
-# =====================================
+ARQUIVO_ESTADO = "dados_clientes.json"
+ARQUIVO_BLOQUEIOS = "bloqueio_usuarios.json"
 
 mensagens_gp_para_sup = {}
-
 mensagens_sup_para_gp = {}
 
-# =====================================
-# LISTA DE LINKS PERMITIDOS (DOMÍNIOS / URLS)
-# =====================================
 LINKS_PERMITIDOS = [
     "youtube.com/watch?v=Q3-YBHNE254",
     "t.me/x_bot_automatizador/2/33481",
@@ -68,553 +69,219 @@ LINKS_PERMITIDOS = [
     "xbot.net.br"
 ]
 
-# =====================================
-# FUNÇÃO PRINCIPAL
-# =====================================
+def carregar_estado():
+    if os.path.exists(ARQUIVO_ESTADO):
+        try:
+            with open(ARQUIVO_ESTADO, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+                return dados.get("clientes", {}), dados.get("status_cliente", {})
+        except:
+            pass
+    return {}, {}
 
-async def mensagens_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
+def salvar_estado():
     try:
+        with open(ARQUIVO_ESTADO, "w", encoding="utf-8") as f:
+            json.dump({"clientes": clientes, "status_cliente": status_cliente}, f, ensure_ascii=False, indent=4)
+    except:
+        pass
 
-        # IGNORA BOT
-        if (
-            update.effective_user
-            and update.effective_user.is_bot
-        ):
+def carregar_bloqueios():
+    if os.path.exists(ARQUIVO_BLOQUEIOS):
+        try:
+            with open(ARQUIVO_BLOQUEIOS, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def salvar_bloqueios():
+    try:
+        with open(ARQUIVO_BLOQUEIOS, "w", encoding="utf-8") as f:
+            json.dump(bloqueios_usuarios, f, ensure_ascii=False, indent=4)
+    except:
+        pass
+
+clientes, status_cliente = carregar_estado()
+clientes = {int(k): v for k, v in clientes.items()}
+status_cliente = {int(k): v for k, v in status_cliente.items()}
+bloqueios_usuarios = {int(k): v for k, v in carregar_bloqueios().items()}
+
+TABELA_DESCONTO_USDT = {
+    "4": 10.00, "7.60": 19.00, "10.80": 27.00,
+    "13.60": 34.00, "16": 40.00, "18": 45.00, "32.40": 81.00
+}
+
+# =========================================
+# COMANDOS DE PAGAMENTO E MENU (PRIVADO)
+# =========================================
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    usuario_id = update.effective_chat.id
+    if usuario_id != DONO_ID and usuario_id in bloqueios_usuarios:
+        if (time.time() - bloqueios_usuarios[usuario_id]) < (20 * 24 * 60 * 60):
+            await update.message.reply_text("⚠️ **COMPRA BLOQUEADA**\n\nVocê já possui uma licença ativa recente. Fale com o suporte @nscnatan")
             return
+    await update.message.reply_text("🔥 BEM VINDO 🔥\n\nClique abaixo para continuar.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 PROSEGUIR COM PAGAMENTO", callback_data="pagamento")]]))
 
-        mensagem = (
-            update.message
-            or update.edited_message
-        )
+async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    usuario_id = update.effective_chat.id
+    clientes[usuario_id] = {"valor": "0", "plano": "TESTE", "tipo": "pix"}
+    status_cliente[usuario_id] = "aguardando_email"
+    salvar_estado()
+    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]))
 
+# =========================================
+# MANUTENÇÃO DE MENSAGENS E SUPORTE (GRUPOS)
+# =========================================
+async def mensagens_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        if update.effective_user and update.effective_user.is_bot:
+            return
+        mensagem = update.message or update.edited_message
         if not mensagem:
             return
-
         chat_id = update.effective_chat.id
-
         enviada = None
 
-        # =====================================
-        # CLIENTE -> SUPORTE
-        # =====================================
-
         if chat_id == GRUPO_PRINCIPAL:
-
-            # =====================================
-            # BLOQUEIO DE LINK (GRUPO PRINCIPAL)
-            # =====================================
             texto_verificacao = mensagem.text or mensagem.caption or ""
-            if "http://" in texto_verificacao or "https://" in texto_verificacao or "t.me/" in texto_verificacao:
-                
-                # Verifica se a mensagem contém APENAS os links permitidos ou se não contém links restritos
-                contem_link_nao_permitido = False
-                
-                # Procura por links na mensagem
-                import re
-                urls_encontradas = re.findall(r'(https?://[^\s]+|t\.me/[^\s]+)', texto_verificacao)
-                
-                for url in urls_encontradas:
-                    # Remove o prefixo http:// ou https:// para facilitar a comparação
-                    url_limpa = url.replace("https://", "").replace("http://", "").lower()
-                    
-                    # Checa se a URL bate com algum dos permitidos
-                    permitido = False
-                    for link_ok in LINKS_PERMITIDOS:
-                        if link_ok.lower() in url_limpa:
-                            permitido = True
-                            break
-                    
-                    if not permitido:
-                        contem_link_nao_permitido = True
-                        break
-
-                if contem_link_nao_permitido:
-                    # 1. Apaga a mensagem contendo o link não permitido
-                    await context.bot.delete_message(
-                        chat_id=GRUPO_PRINCIPAL,
-                        message_id=mensagem.message_id
-                    )
-                    
-                    # 2. Envia o aviso para o usuário
-                    usuario_nome = update.effective_user.first_name if update.effective_user else "Usuário"
-                    await context.bot.send_message(
-                        chat_id=GRUPO_PRINCIPAL,
-                        text=f"{usuario_nome}, o envio de links não autorizados não é permitido neste grupo!"
-                    )
-                    print("LINK NÃO AUTORIZADO BLOQUEADO NO GRUPO PRINCIPAL")
-                    return
-
-            usuario = (
-                update.effective_user.first_name
-            )
-
-            msg_original = (
-                mensagem.message_id
-            )
-
-            # =====================================
-            # EDITAR TEXTO
-            # =====================================
-
-            if update.edited_message:
-
-                if (
-                    msg_original
-                    not in mensagens_gp_para_sup
-                ):
-                    return
-
-                destino_id = (
-                    mensagens_gp_para_sup[
-                        msg_original
-                    ]
-                )
-
-                texto = (
-                    mensagem.text
-                    or ""
-                )
-
-                await context.bot.edit_message_text(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    message_id=destino_id,
-
-                    text=texto
-
-                )
-
-                print("EDITADO GP")
-
+            if any(p in texto_verificacao.lower() for p in ["passes", "tabela", "licença", "preço", "aluguel", "meis", "pass", "planos", "plano", "mensalidade", "pagamento"]):
+                await mensagem.reply_text("💰 TABELA DE PLANOS XBOT 💰\n\nAbra o privado para comprar 👇", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 ABRIR PAGAMENTO", url=BOT_PRIVADO)]]))
                 return
 
-            # =====================================
-            # FOTO
-            # =====================================
+            if "http://" in texto_verificacao or "https://" in texto_verificacao or "t.me/" in texto_verificacao:
+                urls = re.findall(r'(https?://[^\s]+|t\.me/[^\s]+)', texto_verificacao)
+                nao_permitido = any(not any(ok.lower() in u.replace("https://", "").replace("http://", "").lower() for ok in LINKS_PERMITIDOS) for u in urls)
+                if nao_permitido:
+                    await context.bot.delete_message(chat_id=GRUPO_PRINCIPAL, message_id=mensagem.message_id)
+                    await context.bot.send_message(chat_id=GRUPO_PRINCIPAL, text=f"{update.effective_user.first_name}, links não autorizados não são permitidos!")
+                    return
+
+            usuario = update.effective_user.first_name
+            msg_original = mensagem.message_id
 
             if mensagem.photo:
-
-                foto = (
-                    mensagem.photo[-1].file_id
-                )
-
-                legenda = (
-                    mensagem.caption
-                    or ""
-                )
-
-                enviada = await context.bot.send_photo(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    photo=foto,
-
-                    caption=(
-                        f"👤 {usuario}\n\n"
-                        f"{legenda}"
-                    )
-
-                )
-
-            # =====================================
-            # VIDEO
-            # =====================================
-
+                enviada = await context.bot.send_photo(chat_id=GRUPO_SUPORTE, photo=mensagem.photo[-1].file_id, caption=f"👤 {usuario}\n\n{mensagem.caption or ''}")
             elif mensagem.video:
-
-                video = (
-                    mensagem.video.file_id
-                )
-
-                legenda = (
-                    mensagem.caption
-                    or ""
-                )
-
-                enviada = await context.bot.send_video(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    video=video,
-
-                    caption=(
-                        f"👤 {usuario}\n\n"
-                        f"{legenda}"
-                    )
-
-                )
-
-            # =====================================
-            # ÁUDIO / VOZ (ADICIONADO)
-            # =====================================
-
+                enviada = await context.bot.send_video(chat_id=GRUPO_SUPORTE, video=mensagem.video.file_id, caption=f"👤 {usuario}\n\n{mensagem.caption or ''}")
             elif mensagem.voice:
-
-                voice = mensagem.voice.file_id
-
-                enviada = await context.bot.send_voice(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    voice=voice,
-
-                    caption=f"👤 {usuario}"
-
-                )
-
-            elif mensagem.audio:
-
-                audio_id = mensagem.audio.file_id
-
-                legenda = mensagem.caption or ""
-
-                enviada = await context.bot.send_audio(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    audio=audio_id,
-
-                    caption=(
-                        f"👤 {usuario}\n\n"
-                        f"{legenda}"
-                    )
-
-                )
-
-            # =====================================
-            # DOCUMENTO / ARQUIVO (ADICIONADO)
-            # =====================================
-
+                enviada = await context.bot.send_voice(chat_id=GRUPO_SUPORTE, video=mensagem.voice.file_id, caption=f"👤 {usuario}")
             elif mensagem.document:
-
-                document_id = mensagem.document.file_id
-
-                legenda = mensagem.caption or ""
-
-                enviada = await context.bot.send_document(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    document=document_id,
-
-                    caption=(
-                        f"👤 {usuario}\n\n"
-                        f"{legenda}"
-                    )
-
-                )
-
-            # =====================================
-            # TEXTO
-            # =====================================
-
+                enviada = await context.bot.send_document(chat_id=GRUPO_SUPORTE, document=mensagem.document.file_id, caption=f"👤 {usuario}\n\n{mensagem.caption or ''}")
             elif mensagem.text:
-
-                texto = (
-                    mensagem.text
-                    or ""
-                )
-
-                enviada = await context.bot.send_message(
-
-                    chat_id=GRUPO_SUPORTE,
-
-                    text=(
-                        f"👤 {usuario}\n\n"
-                        f"{texto}"
-                    )
-
-                )
-
-            # =====================================
-            # SALVA IDS
-            # =====================================
+                enviada = await context.bot.send_message(chat_id=GRUPO_SUPORTE, text=f"👤 {usuario}\n\n{mensagem.text}")
 
             if enviada:
-
-                mensagens_gp_para_sup[
-                    msg_original
-                ] = enviada.message_id
-
-                mensagens_sup_para_gp[
-                    enviada.message_id
-                ] = msg_original
-
-            print("CLIENTE -> SUPORTE")
-
-        # =====================================
-        # SUPORTE -> GRUPO
-        # =====================================
+                mensagens_gp_para_sup[msg_original] = enviada.message_id
+                mensagens_sup_para_gp[enviada.message_id] = msg_original
 
         elif chat_id == GRUPO_SUPORTE:
-
-            msg_original = (
-                mensagem.message_id
-            )
-
-            # =====================================
-            # COMANDO EXCLUIR
-            # =====================================
-
-            if (
-                mensagem.text
-                and mensagem.text == "/excluir"
-            ):
-
-                if not mensagem.reply_to_message:
-                    return
-
-                reply_id = (
-                    mensagem.reply_to_message.message_id
-                )
-
-                if (
-                    reply_id
-                    not in mensagens_sup_para_gp
-                ):
-                    return
-
-                destino_id = (
-                    mensagens_sup_para_gp[
-                        reply_id
-                    ]
-                )
-
-                await context.bot.delete_message(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    message_id=destino_id
-
-                )
-
-                print("MENSAGEM EXCLUIDA")
-
+            msg_original = mensagem.message_id
+            if mensagem.text and mensagem.text == "/excluir" and mensagem.reply_to_message:
+                reply_id = mensagem.reply_to_message.message_id
+                if reply_id in mensagens_sup_para_gp:
+                    await context.bot.delete_message(chat_id=GRUPO_PRINCIPAL, message_id=mensagens_sup_para_gp[reply_id])
                 return
-
-            # =====================================
-            # EDITAR TEXTO
-            # =====================================
-
-            if update.edited_message:
-
-                if (
-                    msg_original
-                    not in mensagens_sup_para_gp
-                ):
-                    return
-
-                destino_id = (
-                    mensagens_sup_para_gp[
-                        msg_original
-                    ]
-                )
-
-                texto = (
-                    mensagem.text
-                    or ""
-                )
-
-                await context.bot.edit_message_text(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    message_id=destino_id,
-
-                    text=texto
-
-                )
-
-                print("EDITADO SUPORTE")
-
-                return
-
-            # =====================================
-            # FOTO
-            # =====================================
 
             if mensagem.photo:
-
-                foto = (
-                    mensagem.photo[-1].file_id
-                )
-
-                legenda = (
-                    mensagem.caption
-                    or ""
-                )
-
-                enviada = await context.bot.send_photo(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    photo=foto,
-
-                    caption=legenda,
-
-                    message_thread_id=TOPICO_ID
-
-                )
-
-            # =====================================
-            # VIDEO
-            # =====================================
-
+                enviada = await context.bot.send_photo(chat_id=GRUPO_PRINCIPAL, photo=mensagem.photo[-1].file_id, caption=mensagem.caption or "", message_thread_id=TOPICO_ID)
             elif mensagem.video:
-
-                video = (
-                    mensagem.video.file_id
-                )
-
-                legenda = (
-                    mensagem.caption
-                    or ""
-                )
-
-                enviada = await context.bot.send_video(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    video=video,
-
-                    caption=legenda,
-
-                    message_thread_id=TOPICO_ID
-
-                )
-
-            # =====================================
-            # ÁUDIO / VOZ (ADICIONADO)
-            # =====================================
-
+                enviada = await context.bot.send_video(chat_id=GRUPO_PRINCIPAL, video=mensagem.video.file_id, caption=mensagem.caption or "", message_thread_id=TOPICO_ID)
             elif mensagem.voice:
-
-                voice = mensagem.voice.file_id
-
-                enviada = await context.bot.send_voice(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    voice=voice,
-
-                    message_thread_id=TOPICO_ID
-
-                )
-
-            elif mensagem.audio:
-
-                audio_id = mensagem.audio.file_id
-
-                legenda = mensagem.caption or ""
-
-                enviada = await context.bot.send_audio(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    audio=audio_id,
-
-                    caption=legenda,
-
-                    message_thread_id=TOPICO_ID
-
-                )
-
-            # =====================================
-            # DOCUMENTO / ARQUIVO (ADICIONADO)
-            # =====================================
-
+                enviada = await context.bot.send_voice(chat_id=GRUPO_PRINCIPAL, video=mensagem.voice.file_id, message_thread_id=TOPICO_ID)
             elif mensagem.document:
-
-                document_id = mensagem.document.file_id
-
-                legenda = mensagem.caption or ""
-
-                enviada = await context.bot.send_document(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    document=document_id,
-
-                    caption=legenda,
-
-                    message_thread_id=TOPICO_ID
-
-                )
-
-            # =====================================
-            # TEXTO
-            # =====================================
-
+                enviada = await context.bot.send_document(chat_id=GRUPO_PRINCIPAL, document=mensagem.document.file_id, caption=mensagem.caption or "", message_thread_id=TOPICO_ID)
             elif mensagem.text:
-
-                texto = (
-                    mensagem.text
-                    or ""
-                )
-
-                enviada = await context.bot.send_message(
-
-                    chat_id=GRUPO_PRINCIPAL,
-
-                    text=texto,
-
-                    message_thread_id=TOPICO_ID
-
-                )
-
-            # =====================================
-            # SALVA IDs
-            # =====================================
+                enviada = await context.bot.send_message(chat_id=GRUPO_PRINCIPAL, text=mensagem.text, message_thread_id=TOPICO_ID)
 
             if enviada:
+                mensagens_sup_para_gp[msg_original] = enviada.message_id
+                mensagens_gp_para_sup[enviada.message_id] = msg_original
+    except Exception as e:
+        print("Erro:", e)
 
-                mensagens_sup_para_gp[
-                    msg_original
-                ] = enviada.message_id
+# =========================================
+# BOTÕES E INTERAÇÕES NO PRIVADO
+# =========================================
+async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    usuario_id = query.from_user.id
 
-                mensagens_gp_para_sup[
-                    enviada.message_id
-                ] = msg_original
+    if query.data == "pagamento":
+        await query.message.reply_text("💰 ESCOLHA A FORMA DE PAGAMENTO", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 PIX", callback_data="pix")], [InlineKeyboardButton("🌍 USDT", callback_data="usdt")], [InlineKeyboardButton("❌ CANCELAR", callback_data="cancelar")]]))
+    elif query.data == "pix":
+        await query.message.reply_text("💳 ESCOLHA O PLANO PIX", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("1 MÊS — R$20", callback_data="plano_20")], [InlineKeyboardButton("1 ANO — R$162", callback_data="plano_162")]]))
+    elif query.data == "usdt":
+        await query.message.reply_text("🌍 CHOOSE USDT PLAN", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("1 MONTH — 4 USDT", callback_data="usdt_4")], [InlineKeyboardButton("1 YEAR — 32.40 USDT", callback_data="usdt_32.40")]]))
+    elif query.data == "cancelar":
+        clientes.pop(usuario_id, None)
+        status_cliente.pop(usuario_id, None)
+        salvar_estado()
+        await query.message.reply_text("❌ CANCELADO.")
+    elif query.data.startswith("plano_"):
+        v = query.data.replace("plano_", "")
+        clientes[usuario_id] = {"valor": v, "plano": f"{v} Reais", "tipo": "pix", "ativado": False}
+        status_cliente[usuario_id] = "aguardando_comprovante"
+        salvar_estado()
+        await query.message.reply_text(f"💳 PIX R${v}\nChave: choplivre@gmail.com\nEnvie o print do comprovante.")
+    elif query.data.startswith("usdt_"):
+        v = query.data.replace("usdt_", "")
+        clientes[usuario_id] = {"valor": v, "plano": f"{v} USDT", "tipo": "usdt", "ativado": False}
+        status_cliente[usuario_id] = "aguardando_comprovante"
+        salvar_estado()
+        await query.message.reply_text(f"🌍 USDT {v}\nBinance ID: 38862841\nEnvie o print do comprovante.")
+    elif query.data == "email":
+        status_cliente[usuario_id] = "aguardando_email"
+        salvar_estado()
+        await query.message.reply_text("📧 Digite seu email:")
+    elif query.data.startswith("ativar_"):
+        cid = int(query.data.replace("ativar_", ""))
+        bloqueios_usuarios[cid] = time.time()
+        salvar_bloqueios()
+        await context.bot.send_message(chat_id=cid, text="✅ SUA CONTA FOI ATIVADA!")
+        await query.edit_message_text("✅ ATIVADO COM SUCESSO")
+        clientes.pop(cid, None)
+        status_cliente.pop(cid, None)
+        salvar_estado()
 
-            print("SUPORTE -> CLIENTE")
+async def mensagens_privadas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    usuario_id = update.effective_chat.id
+    status = status_cliente.get(usuario_id)
 
-    except Exception as erro:
+    if status == "aguardando_comprovante":
+        if update.message.photo:
+            status_cliente[usuario_id] = "aguardando_email"
+            salvar_estado()
+            await update.message.reply_text("✅ COMPROVANTE RECEBIDO.\n\n📧 Agora envie seu email.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]))
+    elif status == "aguardando_email":
+        email = update.message.text
+        if "@" in email:
+            dados = clientes.get(usuario_id, {})
+            status_cliente[usuario_id] = "aguardando_ativacao"
+            salvar_estado()
+            await context.bot.send_message(
+                chat_id=ATIVADOR_ID,
+                text=f"📧 NOVO EMAIL\n\n📧 {email}\n\n📦 {dados.get('plano', 'N/A')}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ ATIVAR", callback_data=f"ativar_{usuario_id}")]])
+            )
+            await update.message.reply_text("✅ Email recebido. Aguarde ativação.")
 
-        print("================================")
-        print("ERRO:")
-        print(erro)
-        print("================================")
+# =========================================
+# INICIALIZAÇÃO ÚNICA E PERFEITA
+# =========================================
+if __name__ == "__main__":
+    print("BOT UNIFICADO ONLINE")
+    app = Application.builder().token(TOKEN).build()
 
-# =====================================
-# ONLINE
-# =====================================
+    # Comandos e interações no privado
+    app.add_handler(CommandHandler("start", menu))
+    app.add_handler(CommandHandler("4JAB4515", teste))
+    app.add_handler(CallbackQueryHandler(botoes))
+    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, mensagens_privadas))
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, mensagens_privadas))
 
-print("================================")
-print("BOT ONLINE")
-print("================================")
+    # Monitoramento de grupos e suporte
+    app.add_handler(MessageHandler(filters.ALL & ~filters.ChatType.PRIVATE, mensagens_handler))
 
-# =====================================
-# APP
-# =====================================
-
-app = Application.builder().token(TOKEN).build()
-
-app.add_handler(
-
-    MessageHandler(
-        filters.ALL,
-        mensagens_handler
-    )
-
-)
-
-# =====================================
-# START
-# =====================================
-
-app.run_polling()
+    app.run_polling()
