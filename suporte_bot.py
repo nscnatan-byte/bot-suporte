@@ -47,7 +47,7 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # IDS
 # =========================================
 
-ATIVADOR_ID = 929855491
+ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 
 # =========================================
