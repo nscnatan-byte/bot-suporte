@@ -39,10 +39,7 @@ from telegram.ext import (
 # TOKEN E CONFIGURAÇÕES
 # =========================================
 
-# Token oficial do Telegram para o bot ligar
 TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
-
-# Token de API do PagBank para automação de pagamentos Pix
 TOKEN_PAGBANK = "d831a01d-d2cf-4b6d-b0cc-5aa4dbd5b063b5b705694a92bd8c81a7f9896db7a74d3647-f8f9-425e-a622-c35a5557685b"
 
 ATIVADOR_ID = 929855491
@@ -89,21 +86,20 @@ TABELA_DESCONTO_USDT = {
 # =========================================
 # INTEGRAÇÃO PAGBANK API (PIX AUTOMÁTICO)
 # =========================================
-def gerar_pix_pagbank(valor_reais, email_cliente):
-    url = "https://api.pagseguro.com/orders"  # Use "https://sandbox.api.pagseguro.com/orders" para testes se necessário
+def gerar_pix_pagbank(valor_reais):
+    url = "https://api.pagseguro.com/orders"
     headers = {
         "Authorization": f"Bearer {TOKEN_PAGBANK}",
         "Content-Type": "application/json",
         "accept": "application/json"
     }
     
-    # Converte o valor para centavos (ex: R$ 20.00 -> 2000)
     valor_centavos = int(float(valor_reais) * 100)
     
     payload = {
         "reference_id": f"pedido_{datetime.now().strftime('%Y%m%d%H%M%S')}",
         "customer": {
-            "email": email_cliente,
+            "email": "cliente@xbot.com",
             "name": "Cliente XBot",
             "tax_id": "00000000000"
         },
@@ -128,15 +124,9 @@ def gerar_pix_pagbank(valor_reais, email_cliente):
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code == 201:
             dados_resposta = response.json()
-            # Procura os dados do QR Code Pix na resposta da API
             for qr in dados_resposta.get("qr_codes", []):
-                qr_text = qr.get("text") # Copia e Cola
-                links = qr.get("links", [])
-                imagem_url = ""
-                for link in links:
-                    if "rel" in link and "QR" in link["rel"]:
-                        imagem_url = link["href"]
-                return {"sucesso": True, "copia_e_cola": qr_text, "imagem_url": imagem_url}
+                qr_text = qr.get("text")
+                return {"sucesso": True, "copia_e_cola": qr_text}
         return {"sucesso": False, "erro": response.text}
     except Exception as e:
         return {"sucesso": False, "erro": str(e)}
@@ -153,12 +143,10 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     if usuario_id not in clientes:
-        clientes[usuario_id] = {"valor": "0", "plano": "TESTE", "tipo": "pix"}
+        clientes[usuario_id] = {"valor": "20", "plano": "TESTE", "tipo": "pix"}
     status_cliente[usuario_id] = "aguardando_email"
     salvar_estado()
-    teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
-    reply_markup = InlineKeyboardMarkup(teclado)
-    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.", reply_markup=reply_markup)
+    await update.message.reply_text("✅ TESTE LIBERADO.\n\n📧 Agora envie seu email para ativação.")
 
 async def comando_financeiro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id not in [DONO_ID, ATIVADOR_ID]:
@@ -292,23 +280,36 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("plano_"):
         valor = query.data.replace("plano_", "")
         planos = {"20": "1 MÊS", "38": "2 MESES", "54": "3 MESES", "68": "4 MESES", "80": "5 MESES", "90": "6 MESES", "162": "1 ANO"}
-        clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
-        status_cliente[usuario_id] = "aguardando_email"
-        salvar_estado()
-        await query.message.reply_text(f"💳 **PLANO SELECIONADO: R${valor}**\n\n📧 Agora, por favor, envie o seu **e-mail** para gerar o Pix automático:", parse_mode="Markdown")
+        
+        await query.message.reply_text("⏳ Gerando Pix automático na API do PagBank...")
+        
+        # Gera o Pix imediatamente ao clicar no plano
+        resultado = gerar_pix_pagbank(valor)
+        
+        if resultado["sucesso"]:
+            clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
+            status_cliente[usuario_id] = "aguardando_email_pos_pagamento"
+            salvar_estado()
+            
+            copia_e_cola = resultado["copia_e_cola"]
+            await query.message.reply_text(
+                f"💳 **PIX GERADO COM SUCESSO!**\n\n"
+                f"📦 Plano: {planos[valor]} (R$ {valor})\n\n"
+                f"Copie o código Pix abaixo e realize o pagamento:\n\n"
+                f"`{copia_e_cola}`\n\n"
+                f"✅ **Após o pagamento realizado**, envie o seu **e-mail** aqui no chat para liberar o acesso:",
+                parse_mode="Markdown"
+            )
+        else:
+            await query.message.reply_text(f"❌ Erro ao gerar Pix na API: {resultado['erro']}")
 
     elif query.data.startswith("usdt_"):
         valor_usdt = query.data.replace("usdt_", "")
         planos_usdt = {"4": "1 MONTH (USDT)", "7.60": "2 MONTHS (USDT)", "10.80": "3 MONTHS (USDT)", "13.60": "4 MONTHS (USDT)", "16": "5 MONTHS (USDT)", "18": "6 MONTHS (USDT)", "32.40": "1 YEAR (USDT)"}
         clientes[usuario_id] = {"valor": valor_usdt, "plano": planos_usdt[valor_usdt], "tipo": "usdt", "ativado": False}
-        status_cliente[usuario_id] = "aguardando_email"
+        status_cliente[usuario_id] = "aguardando_email_pos_pagamento"
         salvar_estado()
         await query.message.reply_text(f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please send your email address below:", parse_mode="Markdown")
-
-    elif query.data == "email":
-        status_cliente[usuario_id] = "aguardando_email"
-        salvar_estado()
-        await query.message.reply_text("📧 Digite seu email:")
 
     elif query.data.startswith("ativar_"):
         try:
@@ -349,47 +350,11 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     status = status_cliente.get(usuario_id)
 
-    if status == "aguardando_email":
+    if status == "aguardando_email_pos_pagamento":
         email = str(update.message.text).strip()
         if "@" in email and ".com" in email:
             dados = clientes.get(usuario_id, {})
             clientes[usuario_id]["email"] = email
-            salvar_estado()
-
-            # Se for PIX, gera automaticamente usando a API do PagBank
-            if dados.get("tipo") == "pix":
-                await update.message.reply_text("⏳ Gerando cobrança Pix automática via PagBank...")
-                resultado = gerar_pix_pagbank(dados.get("valor"), email)
-                
-                if resultado["sucesso"]:
-                    copia_e_cola = resultado["copia_e_cola"]
-                    status_cliente[usuario_id] = "aguardando_ativacao"
-                    salvar_estado()
-                    
-                    await update.message.reply_text(
-                        f"✅ **PIX GERADO COM SUCESSO!**\n\n"
-                        f"Copie o código Pix abaixo e pague no seu aplicativo do banco:\n\n"
-                        f"`{copia_e_cola}`\n\n"
-                        f"Assim que o pagamento for aprovado, você será notificado!",
-                        parse_mode="Markdown"
-                    )
-                    
-                    # Notifica o ativador
-                    teclado = [
-                        [InlineKeyboardButton("✅ ATIVAR CLIENTE", callback_data=f"ativar_{usuario_id}")],
-                        [InlineKeyboardButton("❌ CANCELAR", callback_data=f"email_errado_{usuario_id}")]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(teclado)
-                    await context.bot.send_message(
-                        chat_id=ATIVADOR_ID,
-                        text=f"💳 **NOVO PIX GERADO (API)**\n\n📧 {email}\n📦 {dados.get('plano')}\n💰 R$ {dados.get('valor')}",
-                        reply_markup=reply_markup
-                    )
-                    return
-                else:
-                    await update.message.reply_text(f"❌ Erro ao gerar Pix automático na API: {resultado['erro']}")
-                    return
-
             status_cliente[usuario_id] = "aguardando_ativacao"
             salvar_estado()
 
@@ -402,10 +367,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             moeda = "USDT" if dados.get('tipo') == "usdt" else "R$"
             await context.bot.send_message(
                 chat_id=ATIVADOR_ID,
-                text=f"📧 NOVO EMAIL\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
+                text=f"💳 **PAGAMENTO REALIZADO / NOVO E-MAIL**\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
                 reply_markup=reply_markup
             )
-            await update.message.reply_text("✅ Email recebido.\n\n⏳ Aguarde a ativação.")
+            await update.message.reply_text("✅ E-mail recebido com sucesso!\n\n⏳ O ativador já foi avisado e vai liberar sua conta em instantes.")
 
 async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
@@ -427,7 +392,7 @@ async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Use:\n/excluir email@gmail.com")
 
 def main():
-    print("BOT ONLINE COM API PAGBANK")
+    print("BOT ONLINE COM PIX AUTOMÁTICO ANTES DO EMAIL")
     try:
         requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=True")
     except:
