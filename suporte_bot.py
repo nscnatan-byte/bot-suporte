@@ -47,7 +47,7 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # IDS
 # =========================================
 
-ATIVADOR_ID = 674527541
+ATIVADOR_ID = 929855491
 DONO_ID = 674527541
 
 # =========================================
@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inteligente inicializado com API Direta do Gemini. Pronto!")
+print("✅ Bot inteligente inicializado com validação rigorosa de data e valor. Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO VIA API DIRETA DO GEMINI
+# MENSAGENS E VERIFICAÇÃO RIGOROSA VIA GEMINI
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -647,10 +647,17 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 image_bytes = await arquivo.download_as_bytearray()
                 image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
-                # Requisição HTTP direta para a API do Gemini
+                # Requisição HTTP direta para a API do Gemini com validação estrita de data e valor
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
-                prompt_texto = f"Analise este comprovante de pagamento. O valor esperado é {valor_esperado} e o recebedor deve ser Natanael ou Natanael S Castro ou Choplivre. Responda estritamente em formato JSON puro contendo exatamente duas chaves: \"valido\" (booleano true ou false) e \"motivo\" (string com explicação curta)."
+                data_hoje = datetime.now().strftime("%Y-%m-%d")
+                prompt_texto = f"""
+                Analise rigorosamente este comprovante de pagamento. 
+                1. O valor exato exigido deve ser: {valor_esperado}.
+                2. O recebedor deve ser Natanael, Natanael S Castro ou Choplivre (ou endereço de carteira válido se for USDT).
+                3. A data do pagamento deve ser recente (considere a data de hoje como {data_hoje}). Recuse se a data for antiga ou alterada.
+                Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
+                """
 
                 payload = {
                     "contents": [{
@@ -700,20 +707,19 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(teclado)
 
                     msg_erro = (
-                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount or receiver did not match our records."
+                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount, receiver, or transaction date is invalid."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor ou o recebedor não confere com o plano escolhido. Envie um print válido."
+                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor ou a data da transação não conferem ou são antigos. Envie um print válido atual."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
                 print(f"Erro na API do Gemini: {e}")
+                # Caso ocorra falha de conexão com a IA, não trava o cliente
                 status_cliente[usuario_id] = "aguardando_email"
                 salvar_estado()
-                teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL" if is_usdt else "📧 ENVIAR EMAIL", callback_data="email")]]
-                reply_markup = InlineKeyboardMarkup(teclado)
-                msg_fallback = "✅ Receipt received.\n\n📧 Now submit your email." if is_usdt else "✅ Comprovante recebido!\n\n📧 Agora envie seu email:"
-                await update.message.reply_text(msg_fallback, reply_markup=reply_markup)
+                teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
+                await update.message.reply_text("✅ Comprovante recebido!\n\n📧 Agora envie seu email:", reply_markup=InlineKeyboardMarkup(teclado))
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
