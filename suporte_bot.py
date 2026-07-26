@@ -6,7 +6,7 @@ def run_fake_server():
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Bot is alive!")
+            self.wfile.write(b"Payment Bot is alive!")
         def log_message(self, format, *args):
             return
 
