@@ -32,7 +32,7 @@ from telegram.ext import (
 import json
 import os
 
-TOKEN = "8219248289:AAGAqc6RP89A38bpC3C_Isy_5yzcPTCCzYs"
+TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
 ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 BOT_PRIVADO = "https://t.me/suporte_xbotbot"
