@@ -41,15 +41,16 @@ from telegram.ext import (
 
 TOKEN = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
 
-# Cole aqui a sua chave gratuita da API do Gemini (obtida no Google AI Studio)
-GEMINI_API_KEY = "SUA_CHAVE_GEMINI_AQUI"
-genai.configure(api_key=GEMINI_API_KEY)
+# Pega a chave de forma segura direto do Render (Variável de Ambiente)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # =========================================
 # IDS
 # =========================================
 
-ATIVADOR_ID = 674527541
+ATIVADOR_ID = 929855491
 DONO_ID = 674527541
 
 # =========================================
@@ -102,7 +103,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inteligente inicializado com Verificação Gemini AI (Leve). Pronto!")
+print("✅ Bot inteligente inicializado com Verificação Gemini AI. Pronto!")
 
 # =========================================
 # MENU
@@ -700,11 +701,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             except Exception as e:
                 print(f"Erro na IA: {e}")
-                # Fallback de segurança caso dê instabilidade na API
                 status_cliente[usuario_id] = "aguardando_email"
                 salvar_estado()
                 teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
-                await update.message.reply_text("✅ Comprovante recebido!\n\n📧 Agora envie seu email:", reply_markup=InlineKeyboardMarkup(teclado))
+                await update.message.reply_text("✅ Comprovante recebido!\n\n📧 Agora envie seu email:", reply_markup=reply_markup)
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
