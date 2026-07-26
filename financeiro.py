@@ -150,7 +150,6 @@ def resetar_financeiro():
     clientes = []
     salvar()
 
-# Cria o pedido Pix e retorna o Copia e Cola junto com o ID da ordem
 def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.com"):
     url = "https://api.pagseguro.com/orders"
     valor_centavos = int(float(valor_reais) * 100)
@@ -188,7 +187,6 @@ def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.co
         print("Erro ao gerar Pix no PagBank:", response.text)
         return None, None
 
-# Verifica na API do PagBank se o pedido foi pago (PAID)
 def verificar_status_pagamento(order_id):
     if not order_id:
         return False
