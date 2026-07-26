@@ -14,31 +14,11 @@ from telegram.ext import (
 )
 import json
 import os
-import glob
-from datetime import datetime
-
-# =========================================
-# TOKEN
-# =========================================
 
 TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
-
-# =========================================
-# IDS
-# =========================================
-
 ATIVADOR_ID = 674527541
 DONO_ID = 674527541
-
-# =========================================
-# LINK BOT
-# =========================================
-
 BOT_PRIVADO = "https://t.me/suporte_xbotbot"
-
-# =========================================
-# DADOS E PERSISTÊNCIA
-# =========================================
 
 ARQUIVO_ESTADO = "dados_clientes.json"
 
@@ -67,9 +47,6 @@ clientes, status_cliente = carregar_estado()
 clientes = {int(k): v for k, v in clientes.items()}
 status_cliente = {int(k): v for k, v in status_cliente.items()}
 
-# =========================================
-# TABELA DE DESCONTO USDT
-# =========================================
 TABELA_DESCONTO_USDT = {
     "4": 10.00,
     "7.60": 19.00,
@@ -79,10 +56,6 @@ TABELA_DESCONTO_USDT = {
     "18": 45.00,
     "32.40": 81.00
 }
-
-# =========================================
-# MENU
-# =========================================
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teclado = [[
@@ -116,10 +89,6 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.",
         reply_markup=reply_markup
     )
-
-# =========================================
-# COMANDOS FINANCEIROS DO DONO
-# =========================================
 
 async def comando_financeiro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id not in [DONO_ID, ATIVADOR_ID]:
@@ -233,10 +202,6 @@ async def grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(teclado)
         await update.message.reply_text("💰 TABELA DE PLANOS XBOT 💰\n\n👇 ABRIR PAGAMENTO NO PRIVADO 👇", reply_markup=reply_markup)
 
-# =========================================
-# BOTÕES E PAGAMENTO AUTOMÁTICO VIA API
-# =========================================
-
 async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -298,7 +263,6 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("❌ Erro ao conectar com o PagBank. Tente novamente mais tarde.")
             return
 
-        # Guarda os dados incluindo o ID do pedido gerado no PagBank
         clientes[usuario_id] = {
             "valor": valor,
             "plano": planos[valor],
@@ -403,15 +367,10 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as erro:
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
-# =========================================
-# CAPTURA DE EMAIL E COMPROVANTES USDT
-# =========================================
-
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     status = status_cliente.get(usuario_id)
 
-    # Mantém apenas para USDT (já que Pix agora é validado direto na API do banco)
     if status == "aguardando_comprovante":
         if update.message.photo:
             status_cliente[usuario_id] = "aguardando_email"
@@ -440,10 +399,6 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
             await update.message.reply_text("✅ Email recebido.\n\n⏳ Aguarde ativação.")
-
-# =========================================
-# APP
-# =========================================
 
 print("BOT ONLINE COM API PAGBANK")
 
