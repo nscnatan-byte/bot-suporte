@@ -38,7 +38,7 @@ from datetime import datetime
 # TOKEN
 # =========================================
 
-TOKEN = "7468330527:AAFqK88HhuwP2WtGLFmkD-bTzwerMD9gMzY"
+TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
 
 # =========================================
 # IDS
