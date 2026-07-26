@@ -15,40 +15,9 @@ def run_fake_server():
 
 threading.Thread(target=run_fake_server, daemon=True).start()
 
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
 from datetime import datetime
-
-# =========================================
-# SERVIDOR HTTP PARA O RENDER NÃO DORMIR
-# =========================================
-def run_fake_server():
-    class SimpleHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is alive!")
-
-        def do_POST(self):
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
-            try:
-                self.send_response(200)
-                self.end_headers()
-            except Exception as e:
-                self.send_response(400)
-                self.end_headers()
-
-        def log_message(self, format, *args):
-            return
-
-    server = HTTPServer(("0.0.0.0", 10000), SimpleHandler)
-    server.serve_forever()
-
-# Inicia o servidor HTTP em background (segundo plano)
-threading.Thread(target=run_fake_server, daemon=True).start()
 
 from telegram import (
     Update,
@@ -75,7 +44,7 @@ TOKEN = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
 # IDS
 # =========================================
 
-ATIVADOR_ID = 929855491
+ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 
 # =========================================
