@@ -47,7 +47,7 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # IDS
 # =========================================
 
-ATIVADOR_ID = 674527541
+ATIVADOR_ID = 929855491
 DONO_ID = 674527541
 
 # =========================================
@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inicializado. Validação USDT ajustada apenas para o valor. Pronto!")
+print("✅ Bot inicializado com IA otimizada para leitura flexível de comprovantes. Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO COM REGRAS SEPARADAS (PIX x USDT)
+# MENSAGENS E VERIFICAÇÃO FLEXÍVEL VIA GEMINI
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -652,23 +652,20 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data_hoje = datetime.now().strftime("%Y-%m-%d")
 
                 if is_usdt:
-                    # REGRAS PARA USDT: Verifica apenas se a imagem é um comprovante e se o valor bate com o escolhido
                     prompt_texto = f"""
-                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE TRANSFERÊNCIA DE CRIPTO/USDT válido.
-                    1. O valor exato exigido deve ser: {valor_esperado} USDT.
-                    2. IMPORTANTE: Não verifique data antiga nem endereço de carteira/destinatário para USDT. Aceite qualquer endereço de destino.
-                    3. Se a imagem for uma foto qualquer, meme, paisagem ou texto motivacional, retorne "valido": false.
-                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
+                    Analise esta imagem de comprovante USDT.
+                    1. O valor exigido é {valor_esperado} USDT.
+                    2. Verifique apenas se o valor confere. Retorne "valido": true se o valor estiver correto.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
                     """
                 else:
-                    # REGRAS PARA PIX: Rigor total (Valor, Recebedor e Data de hoje)
                     prompt_texto = f"""
-                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PIX BANCÁRIO válido.
-                    1. O valor exato exigido deve ser: R$ {valor_esperado}.
-                    2. O recebedor deve ser Natanael, Natanael S Castro ou Choplivre.
-                    3. A data do pagamento deve ser recente (hoje é {data_hoje}).
-                    4. Se a imagem for uma foto qualquer, meme, paisagem, texto motivacional ou comprovante falso/antigo, retorne "valido": false.
-                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
+                    Analise esta imagem de comprovante Pix.
+                    1. O valor deve ser R$ {valor_esperado}.
+                    2. O recebedor deve ser Natanael ou Choplivre.
+                    3. A data presente na imagem deve ser recente ou conter a data de hoje ({data_hoje}).
+                    Retorne "valido": true se o valor, o recebedor e a data estiverem corretos.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
                     """
 
                 payload = {
@@ -721,7 +718,7 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     msg_erro = (
                         "❌ RECEIPT REJECTED BY AI.\n\nThe amount does not match or this is not a valid receipt."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor ou a data da transação não conferem."
+                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor ou a data não conferem."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
