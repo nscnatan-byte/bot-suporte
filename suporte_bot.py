@@ -47,6 +47,10 @@ BOT_PRIVADO = "https://t.me/suporte_xbotbot"
 
 ARQUIVO_ESTADO = "dados_clientes.json"
 
+# Credenciais do PagBank vindas das Variáveis de Ambiente do Render
+PAGBANK_TOKEN = os.getenv("PAGBANK_TOKEN", "EAFE44AAE5E53D5BB4821F8232335B10")
+PAGBANK_CLIENT_ID = os.getenv("PAGBANK_CLIENT_ID", "xbot")
+
 def carregar_estado():
     if os.path.exists(ARQUIVO_ESTADO):
         try:
@@ -81,6 +85,67 @@ TABELA_DESCONTO_USDT = {
     "18": 45.00,
     "32.40": 81.00
 }
+
+# =========================================
+# FUNÇÃO PARA GERAR PIX NO PAGBANK
+# =========================================
+def gerar_pix_pagbank(valor_reais, referencia_id):
+    url = "https://api.pagseguro.com/orders"
+    
+    headers = {
+        "Authorization": f"Bearer {PAGBANK_TOKEN}",
+        "Content-Type": "application/json",
+        "accept": "application/json"
+    }
+    
+    valor_centavos = int(float(valor_reais) * 100)
+    
+    payload = {
+        "reference_id": f"xbot_{referencia_id}_{int(datetime.now().timestamp())}",
+        "customer": {
+            "name": "Cliente Xbot",
+            "email": "cliente@xbot.com",
+            "tax_id": "00000000000"
+        },
+        "items": [
+            {
+                "name": f"Plano Xbot - R$ {valor_reais}",
+                "quantity": 1,
+                "unit_amount": valor_centavos
+            }
+        ],
+        "qr_codes": [
+            {
+                "amount": {
+                    "value": valor_centavos
+                },
+                "expiration_date": "2026-12-31T23:59:59-03:00"
+            }
+        ],
+        "notification_urls": [
+            "https://bot-suporte-k5jk.onrender.com"
+        ]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
+        if response.status_code in [200, 201]:
+            dados_resposta = response.json()
+            qr_codes = dados_resposta.get("qr_codes", [])
+            if qr_codes:
+                link_qrcode = ""
+                texto_copia_cola = ""
+                for qrc in qr_codes:
+                    texto_copia_cola = qrc.get("text", "")
+                    links = qrc.get("links", [])
+                    for l in links:
+                        if l.get("rel") == "QR_CODE.PNG":
+                            link_qrcode = l.get("href")
+                return texto_copia_cola, link_qrcode
+        print(f"Erro PagBank API: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Erro de conexão com PagBank: {e}")
+    return None, None
 
 # =========================================
 # HANDLERS DO BOT
@@ -233,17 +298,36 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("plano_"):
         valor = query.data.replace("plano_", "")
         planos = {"20": "1 MÊS", "38": "2 MESES", "54": "3 MESES", "68": "4 MESES", "80": "5 MESES", "90": "6 MESES", "162": "1 ANO"}
-        clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
+        
+        await query.message.reply_text("⏳ Gerando seu Pix automático pelo PagBank...")
+        
+        copia_cola, qr_code_url = gerar_pix_pagbank(valor, usuario_id)
+        
+        clientes[usuario_id] = {
+            "valor": valor, 
+            "plano": planos[valor], 
+            "tipo": "pix", 
+            "ativado": False,
+            "copia_cola": copia_cola
+        }
         status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
-        await query.message.reply_text(
-            f"💳 **PAGAMENTO PIX**\n\n"
-            f"💰 Valor: R${valor}\n\n"
-            f"PIX:\n`choplivre@gmail.com`\n\n"
-            f"👤 Natanael S Castro\n\n"
-            f"📧 Após pagar, envie seu e-mail de acesso abaixo:", 
-            parse_mode="Markdown"
-        )
+
+        if copia_cola:
+            await query.message.reply_text(
+                f"💳 **PAGAMENTO PIX (PAGBANK)**\n\n"
+                f"💰 Valor: R$ {valor}\n\n"
+                f"📋 **Código Copia e Cola:**\n`{copia_cola}`\n\n"
+                f"📧 Após realizar o pagamento, envie seu **e-mail** de acesso abaixo:",
+                parse_mode="Markdown"
+            )
+        else:
+            await query.message.reply_text(
+                f"⚠️ Erro ao gerar Pix automático. Utilize a chave manual:\n\n"
+                f"PIX: `choplivre@gmail.com`\n👤 Natanael S Castro\n\n"
+                f"📧 Após pagar, envie seu e-mail abaixo:",
+                parse_mode="Markdown"
+            )
 
     elif query.data.startswith("usdt_"):
         valor_usdt = query.data.replace("usdt_", "")
