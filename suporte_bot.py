@@ -64,12 +64,11 @@ def salvar_estado():
         print(f"Erro ao salvar estado: {e}")
 
 clientes, status_cliente = carregar_estado()
-# Converte as chaves de string para int, já que o json converte chaves de dicionário para string
 clientes = {int(k): v for k, v in clientes.items()}
 status_cliente = {int(k): v for k, v in status_cliente.items()}
 
 recibos_usados = set()
-arquivos_processados = set()  # Guarda o nome dos arquivos para evitar reprocessamento
+arquivos_processados = set() 
 
 # =========================================
 # TABELA FIXA DE DESCONTO USDT (EM REAIS)
@@ -88,18 +87,14 @@ TABELA_DESCONTO_USDT = {
 # =========================================
 
 def carregar_historico_comprovantes_salvos():
-    """
-    Apenas indexa os nomes dos arquivos existentes.
-    """
     print("⏳ Indexando imagens antigas na pasta de segurança...")
     imagens_salvas = glob.glob("comprovante_*.jpg")
     
     for imagem in imagens_salvas:
         arquivos_processados.add(imagem)
-            
+          
     print(f"✅ Varredura concluída! {len(arquivos_processados)} arquivos antigos indexados. Bot pronto!")
 
-# Executa a varredura instantânea ao ligar o bot
 carregar_historico_comprovantes_salvos()
 
 # =========================================
@@ -320,7 +315,6 @@ async def comando_addsaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # Força o valor a ser estritamente POSITIVO
         valor = abs(float(context.args[0].replace(",", ".")))
 
         import financeiro
@@ -365,7 +359,6 @@ async def comando_divida(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # Pega o valor e converte obrigatoriamente para NEGATIVO
         valor = -abs(float(context.args[0].replace(",", ".")))
 
         import financeiro
@@ -476,6 +469,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     usuario_id = query.from_user.id
+    user_name = query.from_user.first_name or "Cliente"
 
     if query.data == "pagamento":
 
@@ -620,6 +614,13 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         }
 
+        # Gera o Pix Automático via PagBank
+        import financeiro
+        codigo_pix = financeiro.gerar_pix_pagbank(valor, user_name)
+
+        if not codigo_pix:
+            codigo_pix = "Erro ao gerar Pix automático. Tente novamente mais tarde."
+
         clientes[usuario_id] = {
 
             "valor": valor,
@@ -634,16 +635,11 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text(
 
-            f"💳 PAGAMENTO PIX\n\n"
-
-            f"💰 Valor: R${valor}\n\n"
-
-            "PIX:\n"
-            "choplivre@gmail.com\n\n"
-
-            "👤 Natanael S Castro\n\n"
-
-            "📩 Após o pagamento, envie o comprovante em imagem (print). Não envie o comprovante em arquivo."
+            f"💳 **COBRANÇA PIX GERADA**\n\n"
+            f"💰 **Valor:** R${valor}\n\n"
+            f"🔗 **Pix Copia e Cola:**\n`{codigo_pix}`\n\n"
+            f"📩 Após pagar, envie o comprovante em imagem (print) para liberação automática.",
+            parse_mode="Markdown"
 
         )
 
@@ -794,7 +790,6 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clientes[cliente_id]["ativado_financeiro"] = True
             salvar_estado()
 
-            # Confirmação adaptada ao idioma escolhido
             if is_usdt:
                 text_sucesso_cliente = (
                     "✅ YOUR ACCOUNT HAS BEEN ACTIVATED.\n\n"
@@ -895,7 +890,6 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caminho = f"comprovante_{usuario_id}_{timestamp_nome}.jpg"
             await arquivo.download_to_drive(caminho)
 
-            # Avança direto para pedir o email após o envio da imagem
             status_cliente[usuario_id] = "aguardando_email"
             salvar_estado()
 
