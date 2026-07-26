@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inicializado. PIX seguro (Valor + Natanael + Data) e USDT (Apenas Valor). Pronto!")
+print("✅ Bot inicializado. Validação rigorosa configurada. Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO INTELIGENTE (PIX x USDT)
+# MENSAGENS E VERIFICAÇÃO RIGOROSA
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -651,21 +651,19 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data_hoje = datetime.now().strftime("%Y-%m-%d")
 
                 if is_usdt:
-                    # USDT: Verifica APENAS se o valor confere
                     prompt_texto = f"""
-                    Analise esta imagem de comprovante de pagamento em USDT.
-                    O valor exato exigido é: {valor_esperado} USDT.
-                    Verifique se o valor {valor_esperado} está presente na imagem. Se estiver correto, retorne "valido": true. Caso contrário, retorne "valido": false.
+                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PAGAMENTO EM USDT (dólar cripto) válido.
+                    1. O valor exato exigido deve ser: {valor_esperado} USDT.
+                    2. Se a imagem for uma foto qualquer, meme, paisagem, texto motivacional ou um print que não seja de uma transação USDT real, retorne estritamente "valido": false.
                     Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
                     """
                 else:
-                    # PIX: Verifica o Valor, se o nome tem Natanael (ou Choplivre) e se a data é de hoje
                     prompt_texto = f"""
-                    Analise esta imagem de comprovante de Pix.
-                    1. O valor deve ser R$ {valor_esperado}.
-                    2. O recebedor deve ser Natanael ou Choplivre.
-                    3. A data do comprovante deve conter a data de hoje ({data_hoje}) ou ser recente.
-                    Se o valor, o nome Natanael/Choplivre e a data estiverem corretos, retorne "valido": true. Caso contrário, retorne "valido": false.
+                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PIX BANCÁRIO válido.
+                    1. O valor exato exigido deve ser: R$ {valor_esperado}.
+                    2. O recebedor obrigatório deve ser Natanael, Natanael S Castro, Natanael Dos Santos Castro ou Choplivre.
+                    3. A data da transação deve ser de hoje ({data_hoje}) ou recente.
+                    4. Se a imagem for uma foto qualquer, meme, paisagem, print alterado/falso ou não contiver esses dados corretos do Pix, retorne estritamente "valido": false.
                     Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
                     """
 
@@ -686,13 +684,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 response = requests.post(url, json=payload, timeout=15)
                 resultado_json = response.json()
                 
-                try:
-                    texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
-                    texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
-                    dados_ia = json.loads(texto_limpo)
-                    valido = dados_ia.get("valido")
-                except:
-                    valido = True
+                texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
+                texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
+                dados_ia = json.loads(texto_limpo)
+                valido = dados_ia.get("valido", False)
 
                 if valido == True:
                     status_cliente[usuario_id] = "aguardando_email"
@@ -721,32 +716,21 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(teclado)
 
                     msg_erro = (
-                        "❌ RECEIPT REJECTED. The amount does not match."
+                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount does not match or this is not a valid receipt."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO. O valor, a data ou o recebedor Natanael não conferem."
+                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor Natanael ou a data não conferem."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
-                print(f"Erro na API do Gemini: {e}")
-                # Fallback de segurança para não travar a venda se a API oscilar
-                status_cliente[usuario_id] = "aguardando_email"
-                salvar_estado()
-
-                teclado = [[
-                    InlineKeyboardButton(
-                        "📧 SEND EMAIL" if is_usdt else "📧 ENVIAR EMAIL",
-                        callback_data="email"
-                    )
-                ]]
+                print(f"Erro na análise da IA: {e}")
+                teclado = [
+                    [InlineKeyboardButton("🔄 TRY AGAIN" if is_usdt else "🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
+                    [InlineKeyboardButton("❌ CANCEL" if is_usdt else "❌ CANCELAR", callback_data="cancelar")]
+                ]
                 reply_markup = InlineKeyboardMarkup(teclado)
-                
-                msg_fallback = (
-                    "✅ RECEIPT VALIDATED!\n\n📧 Now please submit your email address."
-                    if is_usdt else
-                    "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email."
-                )
-                await update.message.reply_text(msg_fallback, reply_markup=reply_markup)
+                msg_erro_conexao = "❌ ERROR ANALYZING RECEIPT." if is_usdt else "❌ ERRO NA ANÁLISE DO COMPROVANTE. Tente novamente."
+                await update.message.reply_text(msg_erro_conexao, reply_markup=reply_markup)
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
