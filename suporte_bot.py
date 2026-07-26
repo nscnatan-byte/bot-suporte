@@ -69,7 +69,7 @@ from telegram.ext import (
 # TOKEN
 # =========================================
 
-TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
+TOKEN = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
 
 # =========================================
 # IDS
