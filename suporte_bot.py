@@ -16,7 +16,7 @@ import json
 import os
 
 TOKEN = "8219248289:AAGAqc6RP89A38bpC3C_Isy_5yzcPTCCzYs"
-ATIVADOR_ID = 929855491
+ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 BOT_PRIVADO = "https://t.me/suporte_xbotbot"
 
