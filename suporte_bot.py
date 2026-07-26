@@ -17,8 +17,9 @@ threading.Thread(target=run_fake_server, daemon=True).start()
 
 import json
 import os
+import base64
+import requests
 from datetime import datetime
-import google.generativeai as genai
 
 from telegram import (
     Update,
@@ -40,11 +41,7 @@ from telegram.ext import (
 # =========================================
 
 TOKEN = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
-
-# Pega a chave de forma segura direto do Render (Variável de Ambiente)
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 # =========================================
 # IDS
@@ -103,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inteligente inicializado com Verificação Gemini AI. Pronto!")
+print("✅ Bot inteligente inicializado com API Direta do Gemini. Pronto!")
 
 # =========================================
 # MENU
@@ -615,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO INTELIGENTE VIA GEMINI AI
+# MENSAGENS E VERIFICAÇÃO VIA API DIRETA DO GEMINI
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -644,29 +641,39 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(msg_rec)
 
             try:
-                # Baixa a foto direto para a memória RAM sem salvar no disco
+                # Baixa a foto para memória RAM
                 foto = update.message.photo[-1]
                 arquivo = await foto.get_file()
                 image_bytes = await arquivo.download_as_bytearray()
+                image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
-                # Usa a API do Gemini para ler o print instantaneamente
-                model = genai.GenerativeModel('gemini-2.5-flash')
+                # Requisição HTTP direta para a API do Gemini
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
-                prompt = f"""
-                Analise este comprovante de pagamento e responda estritamente em formato JSON com duas chaves:
-                1. "valido": true ou false. (Considere verdadeiro se o comprovante for legítimo, o valor for exatamente igual a {valor_esperado} e o recebedor for Natanael ou Natanael S Castro ou Choplivre).
-                2. "motivo": Explicação curta se for falso.
-                """
+                prompt_texto = f"Analise este comprovante de pagamento. O valor esperado é {valor_esperado} e o recebedor deve ser Natanael ou Natanael S Castro ou Choplivre. Responda estritamente em formato JSON puro contendo exatamente duas chaves: \"valido\" (booleano true ou false) e \"motivo\" (string com explicação curta)."
 
-                response = model.generate_content([
-                    prompt,
-                    {"mime_type": "image/jpeg", "data": bytes(image_bytes)}
-                ])
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {"text": prompt_texto},
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": image_b64
+                                }
+                            }
+                        ]
+                    }]
+                }
+
+                response = requests.post(url, json=payload, timeout=15)
+                resultado_json = response.json()
                 
-                resposta_texto = response.text.strip().replace("```json", "").replace("```", "")
-                resultado_ia = json.loads(resposta_texto)
+                texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
+                texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
+                dados_ia = json.loads(texto_limpo)
 
-                if resultado_ia.get("valido") == True:
+                if dados_ia.get("valido") == True:
                     status_cliente[usuario_id] = "aguardando_email"
                     salvar_estado()
 
@@ -700,11 +707,13 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
-                print(f"Erro na IA: {e}")
+                print(f"Erro na API do Gemini: {e}")
                 status_cliente[usuario_id] = "aguardando_email"
                 salvar_estado()
-                teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
-                await update.message.reply_text("✅ Comprovante recebido!\n\n📧 Agora envie seu email:", reply_markup=reply_markup)
+                teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL" if is_usdt else "📧 ENVIAR EMAIL", callback_data="email")]]
+                reply_markup = InlineKeyboardMarkup(teclado)
+                msg_fallback = "✅ Receipt received.\n\n📧 Now submit your email." if is_usdt else "✅ Comprovante recebido!\n\n📧 Agora envie seu email:"
+                await update.message.reply_text(msg_fallback, reply_markup=reply_markup)
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
