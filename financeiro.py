@@ -165,13 +165,22 @@ def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.co
         "customer": {
             "name": nome_cliente,
             "email": email_cliente,
-            "tax_id": "00000000000"
+            "tax_id": "19119119100"
         },
+        "items": [
+            {
+                "reference_id": "item_1",
+                "name": "Plano XBot",
+                "quantity": 1,
+                "unit_amount": valor_centavos
+            }
+        ],
         "qr_codes": [
             {
                 "amount": {
                     "value": valor_centavos
-                }
+                },
+                "expiration_date": "2026-12-31T23:59:59-03:00"
             }
         ]
     }
@@ -181,7 +190,20 @@ def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.co
     if response.status_code == 201:
         dados = response.json()
         order_id = dados.get("id")
-        pix_texto = dados["qr_codes"][0]["text"]
+        pix_texto = None
+        
+        try:
+            # Procura o texto do Pix (Copia e Cola) na resposta da API v4
+            if "qr_codes" in dados and len(dados["qr_codes"]) > 0:
+                pix_texto = dados["qr_codes"][0].get("text")
+            
+            if not pix_texto and "charges" in dados and len(dados["charges"]) > 0:
+                charge = dados["charges"][0]
+                if "qr_codes" in charge and len(charge["qr_codes"]) > 0:
+                    pix_texto = charge["qr_codes"][0].get("text")
+        except Exception as e:
+            print("Erro ao extrair string do Pix:", e)
+            
         return order_id, pix_texto
     else:
         print("Erro ao gerar Pix no PagBank:", response.text)
