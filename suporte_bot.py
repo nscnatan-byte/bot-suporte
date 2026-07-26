@@ -126,7 +126,8 @@ TABELA_DESCONTO_USDT = {
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     
-    if usuario_id in bloqueios_usuarios:
+    # Se não for o dono, aplica o bloqueio de 20 dias. O dono pode testar livremente.
+    if usuario_id != DONO_ID and usuario_id in bloqueios_usuarios:
         tempo_ultimo = bloqueios_usuarios[usuario_id]
         tempo_atual = time.time()
         vinte_dias_segundos = 20 * 24 * 60 * 60
@@ -608,6 +609,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 tipo=dados["tipo"]
             )
 
+            # Aplica o bloqueio de 20 dias apenas para clientes normais (o dono não é afetado no menu)
             bloqueios_usuarios[cliente_id] = time.time()
             salvar_bloqueios()
 
