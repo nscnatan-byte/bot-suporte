@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inteligente inicializado com validação rigorosa de data e valor. Pronto!")
+print("✅ Bot inteligente inicializado com validação rigorosa de imagens via IA. Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO RIGOROSA VIA GEMINI
+# MENSAGENS E VERIFICAÇÃO RIGOROSA BLINDADA
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -647,15 +647,16 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 image_bytes = await arquivo.download_as_bytearray()
                 image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
-                # Requisição HTTP direta para a API do Gemini com validação estrita de data e valor
+                # Requisição HTTP direta para a API do Gemini
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
                 data_hoje = datetime.now().strftime("%Y-%m-%d")
                 prompt_texto = f"""
-                Analise rigorosamente este comprovante de pagamento. 
+                Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PAGAMENTO BANCÁRIO (Pix, Transferência ou Transação Crypto/USDT) válido.
                 1. O valor exato exigido deve ser: {valor_esperado}.
                 2. O recebedor deve ser Natanael, Natanael S Castro ou Choplivre (ou endereço de carteira válido se for USDT).
-                3. A data do pagamento deve ser recente (considere a data de hoje como {data_hoje}). Recuse se a data for antiga ou alterada.
+                3. A data do pagamento deve ser recente (hoje é {data_hoje}).
+                IMPORTANTE: Se a imagem for uma foto qualquer, meme, paisagem, texto motivacional ou comprovante falso/antigo, retorne "valido": false.
                 Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
                 """
 
@@ -707,19 +708,23 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(teclado)
 
                     msg_erro = (
-                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount, receiver, or transaction date is invalid."
+                        "❌ RECEIPT REJECTED BY AI.\n\nThis is not a valid payment receipt or the details do not match."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor ou a data da transação não conferem ou são antigos. Envie um print válido atual."
+                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ Isto não é um comprovante de pagamento válido ou os dados não conferem."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
                 print(f"Erro na API do Gemini: {e}")
-                # Caso ocorra falha de conexão com a IA, não trava o cliente
-                status_cliente[usuario_id] = "aguardando_email"
-                salvar_estado()
-                teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
-                await update.message.reply_text("✅ Comprovante recebido!\n\n📧 Agora envie seu email:", reply_markup=InlineKeyboardMarkup(teclado))
+                # BLOQUEIO DE SEGURANÇA: Se der qualquer erro na IA, recusa a imagem para proteger contra fraudes
+                teclado = [
+                    [InlineKeyboardButton("🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
+                    [InlineKeyboardButton("❌ CANCELAR", callback_data="cancelar")]
+                ]
+                await update.message.reply_text(
+                    "❌ ERRO NA ANÁLISE DO COMPROVANTE.\n\n⚠️ Não foi possível validar sua imagem com segurança. Por favor, envie um print nítido do comprovante de pagamento.",
+                    reply_markup=InlineKeyboardMarkup(teclado)
+                )
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
