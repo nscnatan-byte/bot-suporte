@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot online. Google Gemini configurado para leitura eficiente de comprovantes.")
+print("✅ Bot online. Verificação ajustada: Pix (Data + Natanael + Valor) e USDT (Valor).")
 
 # =========================================
 # MENU
@@ -589,7 +589,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# ANÁLISE DO GOOGLE GEMINI (DIRETA E EFICIENTE)
+# ANÁLISE DO COMPROVANTE (PIX: DATA, NOME E VALOR / USDT: VALOR)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -624,7 +624,8 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
-                # Instrução limpa e direta para o Google Gemini
+                data_hoje = datetime.now().strftime("%Y-%m-%d")
+
                 if is_usdt:
                     prompt_texto = f"""
                     Analise este print de pagamento em USDT.
@@ -635,9 +636,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     prompt_texto = f"""
                     Analise este print de comprovante Pix.
-                    1. O valor deve ser R$ {valor_esperado}.
-                    2. O recebedor deve ser Natanael ou Choplivre.
-                    Retorne "valido": true se o valor e o recebedor estiverem corretos. Caso contrário, retorne "valido": false.
+                    1. Verifique se o valor é R$ {valor_esperado}.
+                    2. Verifique se o nome do recebedor é Natanael ou Choplivre.
+                    3. Verifique se a data está visível e confere com hoje ({data_hoje}) ou é recente.
+                    Se o valor, o nome Natanael/Choplivre e a data estiverem corretos na imagem, retorne "valido": true. Caso contrário, retorne "valido": false.
                     Responda estritamente em formato JSON puro com as chaves "valido" (booleano) e "motivo" (string).
                     """
 
@@ -686,25 +688,19 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]
                     reply_markup = InlineKeyboardMarkup(teclado)
                     await update.message.reply_text(
-                        "❌ COMPROVANTE RECUSADO.\n\nO valor ou o recebedor não conferem.",
+                        "❌ COMPROVANTE RECUSADO.\n\nO valor, a data ou o nome Natanael não conferem.",
                         reply_markup=reply_markup
                     )
 
             except Exception as e:
-                print(f"Erro na IA do Google: {e}")
-                # Fallback inteligente: se houver instabilidade na API do Google, aprova para não travar a venda
-                status_cliente[usuario_id] = "aguardando_email"
-                salvar_estado()
-
-                teclado = [[
-                    InlineKeyboardButton(
-                        "📧 ENVIAR EMAIL",
-                        callback_data="email"
-                    )
-                ]]
+                print(f"Erro na análise da IA: {e}")
+                teclado = [
+                    [InlineKeyboardButton("🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
+                    [InlineKeyboardButton("❌ CANCELAR", callback_data="cancelar")]
+                ]
                 reply_markup = InlineKeyboardMarkup(teclado)
                 await update.message.reply_text(
-                    "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email.",
+                    "❌ ERRO NA ANÁLISE DO COMPROVANTE.\n\nEnvie uma imagem válida de comprovante.",
                     reply_markup=reply_markup
                 )
 
