@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inicializado. Validação ajustada para verificar apenas o valor. Pronto!")
+print("✅ Bot inicializado. PIX seguro (Valor + Natanael + Data) e USDT (Apenas Valor). Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO SIMPLIFICADA (APENAS VALOR)
+# MENSAGENS E VERIFICAÇÃO INTELIGENTE (PIX x USDT)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -648,13 +648,26 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
-                prompt_texto = f"""
-                Analise esta imagem de comprovante de pagamento.
-                O valor exato da compra esperado é: {valor_esperado}.
-                Verifique se o número {valor_esperado} aparece claramente na imagem como o valor pago/transacionado.
-                Se o valor estiver presente e correto, retorne "valido": true. Caso contrário, retorne "valido": false.
-                Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
-                """
+                data_hoje = datetime.now().strftime("%Y-%m-%d")
+
+                if is_usdt:
+                    # USDT: Verifica APENAS se o valor confere
+                    prompt_texto = f"""
+                    Analise esta imagem de comprovante de pagamento em USDT.
+                    O valor exato exigido é: {valor_esperado} USDT.
+                    Verifique se o valor {valor_esperado} está presente na imagem. Se estiver correto, retorne "valido": true. Caso contrário, retorne "valido": false.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
+                    """
+                else:
+                    # PIX: Verifica o Valor, se o nome tem Natanael (ou Choplivre) e se a data é de hoje
+                    prompt_texto = f"""
+                    Analise esta imagem de comprovante de Pix.
+                    1. O valor deve ser R$ {valor_esperado}.
+                    2. O recebedor deve ser Natanael ou Choplivre.
+                    3. A data do comprovante deve conter a data de hoje ({data_hoje}) ou ser recente.
+                    Se o valor, o nome Natanael/Choplivre e a data estiverem corretos, retorne "valido": true. Caso contrário, retorne "valido": false.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
+                    """
 
                 payload = {
                     "contents": [{
@@ -710,12 +723,13 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     msg_erro = (
                         "❌ RECEIPT REJECTED. The amount does not match."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO. O valor não confere com o plano."
+                        "❌ COMPROVANTE RECUSADO. O valor, a data ou o recebedor Natanael não conferem."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
                 print(f"Erro na API do Gemini: {e}")
+                # Fallback de segurança para não travar a venda se a API oscilar
                 status_cliente[usuario_id] = "aguardando_email"
                 salvar_estado()
 
