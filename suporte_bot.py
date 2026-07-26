@@ -49,7 +49,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 # IDS
 # =========================================
 
-ATIVADOR_ID = 929855491
+ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 
 # =========================================
