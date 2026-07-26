@@ -1,24 +1,3 @@
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import json
-import os
-from datetime import datetime
-
-# Servidor HTTP falso para manter o Render acordado na porta 10000
-def run_fake_server():
-    class SimpleHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is alive!")
-        def log_message(self, format, *args):
-            return
-
-    server = HTTPServer(("0.0.0.0", 10000), SimpleHandler)
-    server.serve_forever()
-
-threading.Thread(target=run_fake_server, daemon=True).start()
-
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -38,7 +17,7 @@ from telegram.ext import (
 # TOKEN E CONFIGURAÇÕES
 # =========================================
 
-TOKEN = "8568503789:AAHN9s3p7YhTIlGEwQeBXo7D5TDGamw6mLE"
+TOKEN = "8977968510:AAH5gCJ8UeS6-DbfwN-AlTFxqbHDUQXxUjc"
 
 ATIVADOR_ID = 929855491
 DONO_ID = 674527541
