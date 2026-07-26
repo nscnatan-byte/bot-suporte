@@ -39,7 +39,7 @@ from telegram.ext import (
 # TOKEN E CONFIGURAÇÕES
 # =========================================
 
-TOKEN = "8568503789:AAHN9s3p7YhTIlGEwQeBXo7D5TDGamw6mLE"
+TOKEN = "8810903311:AAGqdvUvGeg1neOpbccdDSZknDkrx-dtaKc"
 
 ATIVADOR_ID = 929855491
 DONO_ID = 674527541
