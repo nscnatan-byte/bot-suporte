@@ -137,7 +137,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"⚠️ **COMPRA BLOQUEADA**\n\n"
                 f"Você já possui uma licença ativa recente.\n"
-                f"Pelas regras, você só poderá realizar uma nova compra daqui a **{dias_restantes} dias**."
+                f"Pelas regras, você só poderá realizar uma nova falando com suporte {@nscnatan}"
             )
             return
 
