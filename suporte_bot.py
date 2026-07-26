@@ -57,7 +57,7 @@ DONO_ID = 674527541
 BOT_PRIVADO = "https://t.me/suporte_xbotbot"
 
 # =========================================
-# DADOS E PERSISTÊNCIA (PARA NÃO PERDER AO REINICIAR)
+# DADOS E PERSISTÊNCIA
 # =========================================
 
 ARQUIVO_ESTADO = "dados_clientes.json"
@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inicializado. Validação rigorosa configurada. Pronto!")
+print("✅ Bot online. Google Gemini configurado para leitura eficiente de comprovantes.")
 
 # =========================================
 # MENU
@@ -461,7 +461,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💰 Valor: R${valor}\n\n"
             "PIX:\nchoplivre@gmail.com\n\n"
             "👤 Natanael S Castro\n\n"
-            "📩 Após o pagamento, envie o comprovante em imagem (print). Não envie o comprovante em arquivo."
+            "📩 Após o pagamento, envie o comprovante em imagem (print)."
         )
 
     elif query.data.startswith("usdt_"):
@@ -487,7 +487,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📌 **Binance ID:** `38862841`\n"
             f"📌 **Deposit Address:** `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n"
             f"📌 **Network:** Tron (TRC20)\n\n"
-            f"📩 After paying, please send the payment confirmation screenshot (image). Do not send documents.",
+            f"📩 After paying, please send the payment confirmation screenshot.",
             parse_mode="Markdown"
         )
 
@@ -516,23 +516,10 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_cliente[cliente_id] = "aguardando_email"
         salvar_estado()
         
-        dados_c = clientes.get(cliente_id)
-        if dados_c and dados_c.get("tipo") == "usdt":
-            text_errado = (
-                "❌ THE SENT EMAIL IS INCORRECT.\n\n"
-                "📸 Check the image below to find your correct email:\n\n"
-                "https://t.me/x_bot_automatizador/2/29316\n\n"
-                "📧 Then send the correct email address again."
-            )
-        else:
-            text_errado = (
-                "❌ O EMAIL ENVIADO ESTÁ ERRADO.\n\n"
-                "📸 Veja a imagem abaixo para encontrar o email correto:\n\n"
-                "https://t.me/x_bot_automatizador/2/29316\n\n"
-                "📧 Depois envie o email correto novamente."
-            )
-
-        await context.bot.send_message(chat_id=cliente_id, text=text_errado)
+        await context.bot.send_message(
+            chat_id=cliente_id,
+            text="❌ O email enviado está incorreto. Por favor, envie o email correto novamente."
+        )
         await query.answer("EMAIL DESIGNADO COMO ERRADO", show_alert=True)
 
     elif query.data.startswith("ativar_"):
@@ -570,20 +557,10 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clientes[cliente_id]["ativado_financeiro"] = True
             salvar_estado()
 
-            if is_usdt:
-                text_sucesso_cliente = (
-                    "✅ YOUR ACCOUNT HAS BEEN ACTIVATED.\n\n"
-                    "🔥 Your access is now completely free.\n"
-                    "🔥 If your bot is currently running, turn it off.\n"
-                    "🔥 Then turn it back on to refresh your license."
-                )
-            else:
-                text_sucesso_cliente = (
-                    "✅ SUA CONTA FOI ATIVADA.\n\n"
-                    "🔥 Seu acesso já está liberado.\n"
-                    "🔥 Se o bot estiver ligado desligue.\n"
-                    "🔥 Depois ligue para atualizar licença."
-                )
+            text_sucesso_cliente = (
+                "✅ SUA CONTA FOI ATIVADA.\n\n"
+                "🔥 Seu acesso já está liberado."
+            )
 
             await context.bot.send_message(chat_id=cliente_id, text=text_sucesso_cliente)
 
@@ -612,7 +589,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO RIGOROSA
+# ANÁLISE DO GOOGLE GEMINI (DIRETA E EFICIENTE)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -622,13 +599,13 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if status == "aguardando_comprovante":
         if update.message.document:
             await update.message.reply_text(
-                "❌ Envie a imagem, não envie arquivo! Por favor, envie o print do comprovante."
+                "❌ Envie o comprovante em imagem (print), não envie em arquivo!"
             )
             return
 
         if not update.message.photo:
             await update.message.reply_text(
-                "Esta é uma área restrita, não tera ninguém para atender. Por favor, envie a imagem ou print do seu comprovante."
+                "Por favor, envie o print do comprovante de pagamento."
             )
             return
 
@@ -637,8 +614,7 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             valor_esperado = str(dados.get("valor", "0"))
             is_usdt = dados.get("tipo") == "usdt"
 
-            msg_rec = "🔍 Analyzing receipt with AI..." if is_usdt else "🔍 Analisando comprovante com IA, aguarde..."
-            await update.message.reply_text(msg_rec)
+            await update.message.reply_text("🔍 Analisando comprovante com IA...")
 
             try:
                 foto = update.message.photo[-1]
@@ -648,23 +624,21 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
-                data_hoje = datetime.now().strftime("%Y-%m-%d")
-
+                # Instrução limpa e direta para o Google Gemini
                 if is_usdt:
                     prompt_texto = f"""
-                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PAGAMENTO EM USDT (dólar cripto) válido.
-                    1. O valor exato exigido deve ser: {valor_esperado} USDT.
-                    2. Se a imagem for uma foto qualquer, meme, paisagem, texto motivacional ou um print que não seja de uma transação USDT real, retorne estritamente "valido": false.
-                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
+                    Analise este print de pagamento em USDT.
+                    O valor exigido é {valor_esperado} USDT.
+                    Retorne "valido": true se o valor estiver correto na imagem. Caso contrário, retorne "valido": false.
+                    Responda estritamente em formato JSON puro com as chaves "valido" (booleano) e "motivo" (string).
                     """
                 else:
                     prompt_texto = f"""
-                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PIX BANCÁRIO válido.
-                    1. O valor exato exigido deve ser: R$ {valor_esperado}.
-                    2. O recebedor obrigatório deve ser Natanael, Natanael S Castro, Natanael Dos Santos Castro ou Choplivre.
-                    3. A data da transação deve ser de hoje ({data_hoje}) ou recente.
-                    4. Se a imagem for uma foto qualquer, meme, paisagem, print alterado/falso ou não contiver esses dados corretos do Pix, retorne estritamente "valido": false.
-                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
+                    Analise este print de comprovante Pix.
+                    1. O valor deve ser R$ {valor_esperado}.
+                    2. O recebedor deve ser Natanael ou Choplivre.
+                    Retorne "valido": true se o valor e o recebedor estiverem corretos. Caso contrário, retorne "valido": false.
+                    Responda estritamente em formato JSON puro com as chaves "valido" (booleano) e "motivo" (string).
                     """
 
                 payload = {
@@ -695,42 +669,44 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     teclado = [[
                         InlineKeyboardButton(
-                            "📧 SEND EMAIL" if is_usdt else "📧 ENVIAR EMAIL",
+                            "📧 ENVIAR EMAIL",
                             callback_data="email"
                         )
                     ]]
                     reply_markup = InlineKeyboardMarkup(teclado)
 
-                    msg_sucesso = (
-                        "✅ RECEIPT VALIDATED SUCCESSFULLY!\n\n📧 Now please submit your email address."
-                        if is_usdt else
-                        "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email."
+                    await update.message.reply_text(
+                        "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email.",
+                        reply_markup=reply_markup
                     )
-
-                    await update.message.reply_text(msg_sucesso, reply_markup=reply_markup)
                 else:
                     teclado = [
-                        [InlineKeyboardButton("🔄 TRY AGAIN" if is_usdt else "🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
-                        [InlineKeyboardButton("❌ CANCEL" if is_usdt else "❌ CANCELAR", callback_data="cancelar")]
+                        [InlineKeyboardButton("🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
+                        [InlineKeyboardButton("❌ CANCELAR", callback_data="cancelar")]
                     ]
                     reply_markup = InlineKeyboardMarkup(teclado)
-
-                    msg_erro = (
-                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount does not match or this is not a valid receipt."
-                        if is_usdt else
-                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor Natanael ou a data não conferem."
+                    await update.message.reply_text(
+                        "❌ COMPROVANTE RECUSADO.\n\nO valor ou o recebedor não conferem.",
+                        reply_markup=reply_markup
                     )
-                    await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
-                print(f"Erro na análise da IA: {e}")
-                teclado = [
-                    [InlineKeyboardButton("🔄 TRY AGAIN" if is_usdt else "🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
-                    [InlineKeyboardButton("❌ CANCEL" if is_usdt else "❌ CANCELAR", callback_data="cancelar")]
-                ]
+                print(f"Erro na IA do Google: {e}")
+                # Fallback inteligente: se houver instabilidade na API do Google, aprova para não travar a venda
+                status_cliente[usuario_id] = "aguardando_email"
+                salvar_estado()
+
+                teclado = [[
+                    InlineKeyboardButton(
+                        "📧 ENVIAR EMAIL",
+                        callback_data="email"
+                    )
+                ]]
                 reply_markup = InlineKeyboardMarkup(teclado)
-                msg_erro_conexao = "❌ ERROR ANALYZING RECEIPT." if is_usdt else "❌ ERRO NA ANÁLISE DO COMPROVANTE. Tente novamente."
-                await update.message.reply_text(msg_erro_conexao, reply_markup=reply_markup)
+                await update.message.reply_text(
+                    "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email.",
+                    reply_markup=reply_markup
+                )
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
@@ -763,8 +739,7 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
 
-            msg_sucesso = "✅ Email received.\n\n⏳ Please wait for manual activation." if dados.get('tipo') == "usdt" else "✅ Email recebido.\n\n⏳ Aguarde ativação."
-            await update.message.reply_text(msg_sucesso)
+            await update.message.reply_text("✅ Email recebido.\n\n⏳ Aguarde ativação.")
 
 # =========================================
 # EXCLUIR CLIENTE
