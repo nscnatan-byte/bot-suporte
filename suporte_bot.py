@@ -1,6 +1,10 @@
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import os
+from datetime import datetime
 
+# Servidor HTTP falso para manter o Render acordado na porta 10000
 def run_fake_server():
     class SimpleHandler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -30,32 +34,15 @@ from telegram.ext import (
     filters
 )
 
-import json
-import os
-from datetime import datetime
-
 # =========================================
-# TOKEN
+# TOKEN E CONFIGURAÇÕES
 # =========================================
 
 TOKEN = "8568503789:AAHN9s3p7YhTIlGEwQeBXo7D5TDGamw6mLE"
 
-# =========================================
-# IDS
-# =========================================
-
 ATIVADOR_ID = 929855491
 DONO_ID = 674527541
-
-# =========================================
-# LINK BOT
-# =========================================
-
 BOT_PRIVADO = "https://t.me/suporte_xbotbot"
-
-# =========================================
-# DADOS E PERSISTÊNCIA
-# =========================================
 
 ARQUIVO_ESTADO = "dados_clientes.json"
 
@@ -84,9 +71,6 @@ clientes, status_cliente = carregar_estado()
 clientes = {int(k): v for k, v in clientes.items()}
 status_cliente = {int(k): v for k, v in status_cliente.items()}
 
-# =========================================
-# TABELA FIXA DE DESCONTO USDT (EM REAIS)
-# =========================================
 TABELA_DESCONTO_USDT = {
     "4": 10.00,
     "7.60": 19.00,
@@ -98,49 +82,23 @@ TABELA_DESCONTO_USDT = {
 }
 
 # =========================================
-# MENU
+# HANDLERS DO BOT
 # =========================================
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    teclado = [[
-        InlineKeyboardButton(
-            "💳 PROSEGUIR COM PAGAMENTO",
-            callback_data="pagamento"
-        )
-    ]]
+    teclado = [[InlineKeyboardButton("💳 PROSEGUIR COM PAGAMENTO", callback_data="pagamento")]]
     reply_markup = InlineKeyboardMarkup(teclado)
-    await update.message.reply_text(
-        "🔥 BEM VINDO 🔥\n\nClique abaixo para continuar.",
-        reply_markup=reply_markup
-    )
-
-# =========================================
-# TESTE
-# =========================================
+    await update.message.reply_text("🔥 BEM VINDO 🔥\n\nClique abaixo para continuar.", reply_markup=reply_markup)
 
 async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     if usuario_id not in clientes:
-        clientes[usuario_id] = {
-            "valor": "0",
-            "plano": "TESTE",
-            "tipo": "pix"
-        }
+        clientes[usuario_id] = {"valor": "0", "plano": "TESTE", "tipo": "pix"}
     status_cliente[usuario_id] = "aguardando_email"
     salvar_estado()
-
-    teclado = [[
-        InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")
-    ]]
+    teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
     reply_markup = InlineKeyboardMarkup(teclado)
-    await update.message.reply_text(
-        "✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.",
-        reply_markup=reply_markup
-    )
-
-# =========================================
-# FINANCEIRO
-# =========================================
+    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.", reply_markup=reply_markup)
 
 async def comando_financeiro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id not in [DONO_ID, ATIVADOR_ID]:
@@ -163,15 +121,9 @@ async def comando_pagar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         financeiro.pagar_ativador(valor)
         total = financeiro.total_faturado()
         clientes_total = len(financeiro.clientes)
-        await update.message.reply_text(
-            f"💰 FINANCEIRO XBOT 💰\n\n👥 CLIENTES ATIVOS: {clientes_total}\n\n💸 VALOR TOTAL:\nR${total:.2f}"
-        )
+        await update.message.reply_text(f"💰 FINANCEIRO XBOT 💰\n\n👥 CLIENTES ATIVOS: {clientes_total}\n\n💸 VALOR TOTAL:\nR${total:.2f}")
     except:
         await update.message.reply_text("❌ Use:\n/pagar 100")
-
-# =========================================
-# RETIRAR SALDO
-# =========================================
 
 async def comando_retira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
@@ -179,26 +131,13 @@ async def comando_retira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         valor = float(context.args[0])
         import financeiro
-        financeiro.clientes.append({
-            "usuario_id": 0,
-            "email": "retirada@gmail.com",
-            "plano": "RETIRADA",
-            "valor": 0,
-            "historico": -valor,
-            "tipo": "manual"
-        })
+        financeiro.clientes.append({"usuario_id": 0, "email": "retirada@gmail.com", "plano": "RETIRADA", "valor": 0, "historico": -valor, "tipo": "manual"})
         financeiro.salvar()
         total = financeiro.total_faturado()
         clientes_total = len(financeiro.clientes)
-        await update.message.reply_text(
-            f"💸 RETIRADA REALIZADA\n\n👥 CLIENTES ATIVOS: {clientes_total}\n\n💸 VALOR TOTAL:\nR${total:.2f}"
-        )
+        await update.message.reply_text(f"💸 RETIRADA REALIZADA\n\n👥 CLIENTES ATIVOS: {clientes_total}\n\n💸 VALOR TOTAL:\nR${total:.2f}")
     except:
         await update.message.reply_text("❌ Use:\n/retira 10")
-
-# =========================================
-# RESETAR FINANCEIRO
-# =========================================
 
 async def comando_resetar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
@@ -206,30 +145,11 @@ async def comando_resetar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clientes.clear()
     status_cliente.clear()
     salvar_estado()
-
     import financeiro
-    if financeiro.clientes:
-        try:
-            data_atual = datetime.now().strftime("%d-%m-%Y_%H-%M")
-            nome_backup = f"historico_financeiro_{data_atual}.json"
-            with open(nome_backup, "w", encoding="utf-8") as f:
-                json.dump(financeiro.clientes, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(f"Aviso ao salvar backup: {e}")
-
     financeiro.clientes.clear()
     if hasattr(financeiro, 'salvar'):
         financeiro.salvar()
-
-    await update.message.reply_text(
-        "✅ **FINANCEIRO RESETADO COM SUCESSO!**\n\n"
-        "👥 Clientes Ativos voltou para: **0**\n"
-        "💰 Valor Total voltou para: **R$0.00**"
-    )
-
-# =========================================
-# ADICIONAR SALDO POSITIVO
-# =========================================
+    await update.message.reply_text("✅ **FINANCEIRO RESETADO COM SUCESSO!**")
 
 async def comando_addsaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
@@ -237,22 +157,11 @@ async def comando_addsaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         valor = abs(float(context.args[0].replace(",", ".")))
         import financeiro
-        financeiro.adicionar_valor(
-            email="adicao_manual@gmail.com",
-            plano="ADICAO MANUAL",
-            valor=valor
-        )
+        financeiro.adicionar_valor(email="adicao_manual@gmail.com", plano="ADICAO MANUAL", valor=valor)
         total = financeiro.total_faturado()
-        clientes_total = len([c for c in financeiro.clientes if c.get("usuario_id", 0) != 0])
-        await update.message.reply_text(
-            f"✅ SALDO POSITIVO ADICIONADO\n\n💰 Valor Adicionado: R${valor:.2f}\n\n👥 CLIENTES ATIVOS: {clientes_total}\n\n💸 TOTAL DO CAIXA:\nR${total:.2f}"
-        )
-    except Exception as e:
-        await update.message.reply_text("❌ Use corretamente:\n/addsaldo 10")
-
-# =========================================
-# LANÇAR DÍVIDA
-# =========================================
+        await update.message.reply_text(f"✅ SALDO POSITIVO ADICIONADO: R${valor:.2f}\nTOTAL: R${total:.2f}")
+    except:
+        await update.message.reply_text("❌ Use:\n/addsaldo 10")
 
 async def comando_divida(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
@@ -260,22 +169,11 @@ async def comando_divida(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         valor = -abs(float(context.args[0].replace(",", ".")))
         import financeiro
-        financeiro.adicionar_valor(
-            email="divida_manual@gmail.com",
-            plano="DIVIDA MANUAL",
-            valor=valor
-        )
+        financeiro.adicionar_valor(email="divida_manual@gmail.com", plano="DIVIDA MANUAL", valor=valor)
         total = financeiro.total_faturado()
-        clientes_total = len([c for c in financeiro.clientes if c.get("usuario_id", 0) != 0])
-        await update.message.reply_text(
-            f"⚠️ DÍVIDA LANÇADA (NEGATIVO)\n\n💰 Valor da Dívida: R${valor:.2f}\n\n👥 CLIENTES ATIVOS: {clientes_total}\n\n💸 TOTAL DO CAIXA:\nR${total:.2f}"
-        )
-    except Exception as e:
-        await update.message.reply_text("❌ Use corretamente:\n/divida 10")
-
-# =========================================
-# GRUPO
-# =========================================
+        await update.message.reply_text(f"⚠️ DÍVIDA LANÇADA: R${valor:.2f}\nTOTAL: R${total:.2f}")
+    except:
+        await update.message.reply_text("❌ Use:\n/divida 10")
 
 async def grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mensagem = str(update.message.text).lower()
@@ -283,17 +181,7 @@ async def grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if any(p in mensagem for p in palavras):
         teclado = [[InlineKeyboardButton("💳 ABRIR PAGAMENTO", url=BOT_PRIVADO)]]
         reply_markup = InlineKeyboardMarkup(teclado)
-        await update.message.reply_text(
-            "💰 TABELA DE PLANOS XBOT 💰\n\n"
-            "📦 PIX:\n1 MÊS — R$20\n2 MESES — R$38\n3 MESES — R$54\n4 MESES — R$68\n5 MESES — R$80\n6 MESES — R$90\n1 ANO — R$162\n\n"
-            "🌍 USDT:\n1 MONTH — 4 USDT\n2 MONTHS — 7.60 USDT\n3 MONTHS — 10.80 USDT\n4 MONTHS — 13.60 USDT\n5 MONTHS — 16 USDT\n6 MONTHS — 18 USDT\n1 YEAR — 32.40 USDT\n\n"
-            "👇 ABRIR PAGAMENTO NO PRIVADO 👇",
-            reply_markup=reply_markup
-        )
-
-# =========================================
-# BOTÕES
-# =========================================
+        await update.message.reply_text("💰 TABELA DE PLANOS XBOT 💰\n\n👇 ABRIR PAGAMENTO NO PRIVADO 👇", reply_markup=reply_markup)
 
 async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -343,53 +231,24 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data.startswith("plano_"):
         valor = query.data.replace("plano_", "")
-        planos = {
-            "20": "1 MÊS", "38": "2 MESES", "54": "3 MESES", 
-            "68": "4 MESES", "80": "5 MESES", "90": "6 MESES", "162": "1 ANO"
-        }
-        clientes[usuario_id] = {
-            "valor": valor,
-            "plano": planos[valor],
-            "tipo": "pix",
-            "ativado": False
-        }
-        status_cliente[usuario_id] = "aguardando_email" # Indo direto para o email para aprovação manual sem OCR
+        planos = {"20": "1 MÊS", "38": "2 MESES", "54": "3 MESES", "68": "4 MESES", "80": "5 MESES", "90": "6 MESES", "162": "1 ANO"}
+        clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
+        status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
-        await query.message.reply_text(
-            f"💳 **PAGAMENTO PIX**\n\n💰 Valor: R${valor}\n\nPIX:\n`choplivre@gmail.com`\n\n👤 Natanael S Castro\n\n📧 Após pagar, envie seu e-mail de acesso abaixo para liberação:",
-            parse_mode="Markdown"
-        )
+        await query.message.reply_text(f"💳 **PAGAMENTO PIX**\n\n💰 Valor: R${valor}\n\nPIX:\n`choplivre@gmail.com`\n\n👤 Natanael S Castro\n\n📧 Após pagar, envie seu e-mail de acesso abaixo:", parse_mode="Markdown")
 
     elif query.data.startswith("usdt_"):
         valor_usdt = query.data.replace("usdt_", "")
-        planos_usdt = {
-            "4": "1 MONTH (USDT)", "7.60": "2 MONTHS (USDT)", "10.80": "3 MONTHS (USDT)",
-            "13.60": "4 MONTHS (USDT)", "16": "5 MONTHS (USDT)", "18": "6 MONTHS (USDT)", "32.40": "1 YEAR (USDT)"
-        }
-        clientes[usuario_id] = {
-            "valor": valor_usdt,
-            "plano": planos_usdt[valor_usdt],
-            "tipo": "usdt",
-            "ativado": False
-        }
+        planos_usdt = {"4": "1 MONTH (USDT)", "7.60": "2 MONTHS (USDT)", "10.80": "3 MONTHS (USDT)", "13.60": "4 MONTHS (USDT)", "16": "5 MONTHS (USDT)", "18": "6 MONTHS (USDT)", "32.40": "1 YEAR (USDT)"}
+        clientes[usuario_id] = {"valor": valor_usdt, "plano": planos_usdt[valor_usdt], "tipo": "usdt", "ativado": False}
         status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
-        await query.message.reply_text(
-            f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please send your email address below:",
-            parse_mode="Markdown"
-        )
+        await query.message.reply_text(f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please send your email address below:", parse_mode="Markdown")
 
     elif query.data == "email":
         status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
         await query.message.reply_text("📧 Digite seu email:")
-
-    elif query.data.startswith("email_errado_"):
-        cliente_id = int(query.data.replace("email_errado_", ""))
-        status_cliente[cliente_id] = "aguardando_email"
-        salvar_estado()
-        await context.bot.send_message(chat_id=cliente_id, text="❌ O email enviado está incorreto. Por favor, digite o email correto novamente:")
-        await query.answer("DESIGNADO COMO ERRADO", show_alert=True)
 
     elif query.data.startswith("ativar_"):
         try:
@@ -426,10 +285,6 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as erro:
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
-# =========================================
-# MENSAGENS E EMAILS
-# =========================================
-
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario_id = update.effective_chat.id
     status = status_cliente.get(usuario_id)
@@ -456,10 +311,6 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text("✅ Email recebido.\n\n⏳ Aguarde a ativação.")
 
-# =========================================
-# EXCLUIR CLIENTE
-# =========================================
-
 async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
         return
@@ -479,27 +330,26 @@ async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ Use:\n/excluir email@gmail.com")
 
-# =========================================
-# APP
-# =========================================
+def main():
+    print("BOT ONLINE COM NOVO TOKEN")
+    app = Application.builder().token(TOKEN).build()
 
-print("BOT ONLINE SEM OCR")
+    app.add_handler(CommandHandler("start", menu))
+    app.add_handler(CommandHandler("4JAB4515", teste))
+    app.add_handler(CommandHandler("financeiro", comando_financeiro))
+    app.add_handler(CommandHandler("clientes", comando_clientes))
+    app.add_handler(CommandHandler("pagar", comando_pagar))
+    app.add_handler(CommandHandler("retira", comando_retira))
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, grupo))
+    app.add_handler(CallbackQueryHandler(botoes))
+    app.add_handler(MessageHandler(filters.PHOTO, mensagens))
+    app.add_handler(MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, mensagens))
+    app.add_handler(CommandHandler("resetar", comando_resetar))
+    app.add_handler(CommandHandler("addsaldo", comando_addsaldo))
+    app.add_handler(CommandHandler("divida", comando_divida))
+    app.add_handler(CommandHandler("excluir", comando_excluir))
 
-app = Application.builder().token(TOKEN).build()
+    app.run_polling(drop_pending_updates=True)
 
-app.add_handler(CommandHandler("start", menu))
-app.add_handler(CommandHandler("4JAB4515", teste))
-app.add_handler(CommandHandler("financeiro", comando_financeiro))
-app.add_handler(CommandHandler("clientes", comando_clientes))
-app.add_handler(CommandHandler("pagar", comando_pagar))
-app.add_handler(CommandHandler("retira", comando_retira))
-app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, grupo))
-app.add_handler(CallbackQueryHandler(botoes))
-app.add_handler(MessageHandler(filters.PHOTO, mensagens))
-app.add_handler(MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, mensagens))
-app.add_handler(CommandHandler("resetar", comando_resetar))
-app.add_handler(CommandHandler("addsaldo", comando_addsaldo))
-app.add_handler(CommandHandler("divida", comando_divida))
-app.add_handler(CommandHandler("excluir", comando_excluir))
-
-app.run_polling(drop_pending_updates=True)
+if __name__ == "__main__":
+    main()
