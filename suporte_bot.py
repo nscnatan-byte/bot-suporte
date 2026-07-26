@@ -5,13 +5,26 @@ import os
 from datetime import datetime
 import requests
 
-# Servidor HTTP para manter o Render acordado na porta 10000
+# Servidor HTTP para manter o Render acordado e receber o Webhook do PagBank
 def run_fake_server():
     class SimpleHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"Bot is alive!")
+
+        def do_POST(self):
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                # Recebe a notificação oficial enviada para https://bot-suporte-k5jk.onrender.com
+                dados_pagamento = json.loads(post_data.decode('utf-8'))
+                self.send_response(200)
+                self.end_headers()
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+
         def log_message(self, format, *args):
             return
 
@@ -97,7 +110,7 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clientes[usuario_id] = {"valor": "0", "plano": "TESTE", "tipo": "pix"}
     status_cliente[usuario_id] = "aguardando_email"
     salvar_estado()
-    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.")
+    await update.message.reply_text("✅ PAGAMENTO APROVADO.\n\n📧 Agora envie seu e-mail para liberação.")
 
 async def comando_financeiro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id not in [DONO_ID, ATIVADOR_ID]:
@@ -232,7 +245,6 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         valor = query.data.replace("plano_", "")
         planos = {"20": "1 MÊS", "38": "2 MESES", "54": "3 MESES", "68": "4 MESES", "80": "5 MESES", "90": "6 MESES", "162": "1 ANO"}
         clientes[usuario_id] = {"valor": valor, "plano": planos[valor], "tipo": "pix", "ativado": False}
-        status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
         
         await query.message.reply_text(
@@ -240,7 +252,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💰 Valor: R$ {valor}\n\n"
             f"🔑 **Chave PIX (E-mail):**\n`choplivre@gmail.com`\n\n"
             f"👤 Favorecido: Natanael S Castro\n\n"
-            f"📧 Após realizar o pagamento, **envie seu e-mail** abaixo para liberar o acesso:", 
+            f"⚡ Assim que o pagamento for aprovado pelo banco, o campo de e-mail será liberado automaticamente.", 
             parse_mode="Markdown"
         )
 
@@ -251,11 +263,6 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
         await query.message.reply_text(f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please **send your email** below:", parse_mode="Markdown")
-
-    elif query.data == "email":
-        status_cliente[usuario_id] = "aguardando_email"
-        salvar_estado()
-        await query.message.reply_text("📧 Digite seu email:")
 
     elif query.data.startswith("ativar_"):
         try:
@@ -313,10 +320,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             moeda = "USDT" if dados.get('tipo') == "usdt" else "R$"
             await context.bot.send_message(
                 chat_id=ATIVADOR_ID,
-                text=f"📧 NOVO EMAIL RECEBIDO\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
+                text=f"📧 NOVO EMAIL RECEBIDO (PAGAMENTO APROVADO)\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
                 reply_markup=reply_markup
             )
-            await update.message.reply_text("✅ E-mail recebido com sucesso!\n\n⏳ Aguarde um instante enquanto validamos o pagamento e ativamos sua conta.")
+            await update.message.reply_text("✅ E-mail recebido com sucesso!\n\n⏳ Aguarde um instante enquanto ativamos sua conta.")
 
 async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
