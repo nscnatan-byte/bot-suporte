@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot inteligente inicializado com validação rigorosa de imagens via IA. Pronto!")
+print("✅ Bot inicializado. Validação USDT ajustada apenas para o valor. Pronto!")
 
 # =========================================
 # MENU
@@ -612,7 +612,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO RIGOROSA BLINDADA
+# MENSAGENS E VERIFICAÇÃO COM REGRAS SEPARADAS (PIX x USDT)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -647,18 +647,29 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 image_bytes = await arquivo.download_as_bytearray()
                 image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
-                # Requisição HTTP direta para a API do Gemini
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                 
                 data_hoje = datetime.now().strftime("%Y-%m-%d")
-                prompt_texto = f"""
-                Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PAGAMENTO BANCÁRIO (Pix, Transferência ou Transação Crypto/USDT) válido.
-                1. O valor exato exigido deve ser: {valor_esperado}.
-                2. O recebedor deve ser Natanael, Natanael S Castro ou Choplivre (ou endereço de carteira válido se for USDT).
-                3. A data do pagamento deve ser recente (hoje é {data_hoje}).
-                IMPORTANTE: Se a imagem for uma foto qualquer, meme, paisagem, texto motivacional ou comprovante falso/antigo, retorne "valido": false.
-                Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
-                """
+
+                if is_usdt:
+                    # REGRAS PARA USDT: Verifica apenas se a imagem é um comprovante e se o valor bate com o escolhido
+                    prompt_texto = f"""
+                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE TRANSFERÊNCIA DE CRIPTO/USDT válido.
+                    1. O valor exato exigido deve ser: {valor_esperado} USDT.
+                    2. IMPORTANTE: Não verifique data antiga nem endereço de carteira/destinatário para USDT. Aceite qualquer endereço de destino.
+                    3. Se a imagem for uma foto qualquer, meme, paisagem ou texto motivacional, retorne "valido": false.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
+                    """
+                else:
+                    # REGRAS PARA PIX: Rigor total (Valor, Recebedor e Data de hoje)
+                    prompt_texto = f"""
+                    Analise rigorosamente esta imagem. Verifique se é um COMPROVANTE DE PIX BANCÁRIO válido.
+                    1. O valor exato exigido deve ser: R$ {valor_esperado}.
+                    2. O recebedor deve ser Natanael, Natanael S Castro ou Choplivre.
+                    3. A data do pagamento deve ser recente (hoje é {data_hoje}).
+                    4. Se a imagem for uma foto qualquer, meme, paisagem, texto motivacional ou comprovante falso/antigo, retorne "valido": false.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string com explicação curta).
+                    """
 
                 payload = {
                     "contents": [{
@@ -708,23 +719,20 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(teclado)
 
                     msg_erro = (
-                        "❌ RECEIPT REJECTED BY AI.\n\nThis is not a valid payment receipt or the details do not match."
+                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount does not match or this is not a valid receipt."
                         if is_usdt else
-                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ Isto não é um comprovante de pagamento válido ou os dados não conferem."
+                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor, o recebedor ou a data da transação não conferem."
                     )
                     await update.message.reply_text(msg_erro, reply_markup=reply_markup)
 
             except Exception as e:
                 print(f"Erro na API do Gemini: {e}")
-                # BLOQUEIO DE SEGURANÇA: Se der qualquer erro na IA, recusa a imagem para proteger contra fraudes
                 teclado = [
-                    [InlineKeyboardButton("🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
-                    [InlineKeyboardButton("❌ CANCELAR", callback_data="cancelar")]
+                    [InlineKeyboardButton("🔄 TRY AGAIN" if is_usdt else "🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
+                    [InlineKeyboardButton("❌ CANCEL" if is_usdt else "❌ CANCELAR", callback_data="cancelar")]
                 ]
-                await update.message.reply_text(
-                    "❌ ERRO NA ANÁLISE DO COMPROVANTE.\n\n⚠️ Não foi possível validar sua imagem com segurança. Por favor, envie um print nítido do comprovante de pagamento.",
-                    reply_markup=InlineKeyboardMarkup(teclado)
-                )
+                msg_erro_conexao = "❌ ERROR ANALYZING RECEIPT." if is_usdt else "❌ ERRO NA ANÁLISE DO COMPROVANTE."
+                await update.message.reply_text(msg_erro_conexao, reply_markup=InlineKeyboardMarkup(teclado))
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
