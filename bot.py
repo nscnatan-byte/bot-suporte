@@ -133,9 +133,9 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if (tempo_atual - tempo_ultimo) < vinte_dias_segundos:
             await update.message.reply_text(
-                f"⚠️ **COMPRA BLOQUEADA**\n\n"
-                f"Você já possui uma licença ativa recente.\n"
-                f"Pelas regras, você só poderá realizar uma nova falando com suporte {@nscnatan}"
+                "⚠️ **COMPRA BLOQUEADA**\n\n"
+                "Você já possui uma licença ativa recente.\n"
+                "Pelas regras, você só poderá realizar uma nova falando com suporte @nscnatan"
             )
             return
 
