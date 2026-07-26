@@ -14,6 +14,42 @@ def run_fake_server():
     server.serve_forever()
 
 threading.Thread(target=run_fake_server, daemon=True).start()
+
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import os
+from datetime import datetime
+
+# =========================================
+# SERVIDOR HTTP PARA O RENDER NÃO DORMIR
+# =========================================
+def run_fake_server():
+    class SimpleHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is alive!")
+
+        def do_POST(self):
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                self.send_response(200)
+                self.end_headers()
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+
+        def log_message(self, format, *args):
+            return
+
+    server = HTTPServer(("0.0.0.0", 10000), SimpleHandler)
+    server.serve_forever()
+
+# Inicia o servidor HTTP em background (segundo plano)
+threading.Thread(target=run_fake_server, daemon=True).start()
+
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -28,12 +64,6 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-
-import easyocr
-import json
-import os
-import io
-from datetime import datetime
 
 # =========================================
 # TOKEN
@@ -82,11 +112,8 @@ def salvar_estado():
         print(f"Erro ao salvar estado: {e}")
 
 clientes, status_cliente = carregar_estado()
-# Converte as chaves de string para int
 clientes = {int(k): v for k, v in clientes.items()}
 status_cliente = {int(k): v for k, v in status_cliente.items()}
-
-recibos_usados = set()
 
 # =========================================
 # TABELA FIXA DE DESCONTO USDT (EM REAIS)
@@ -101,12 +128,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-# =========================================
-# OCR (INICIALIZAÇÃO)
-# =========================================
-
-leitor = easyocr.Reader(['pt'], gpu=False)
-print("✅ Sistema OCR inicializado. Pronto!")
+print("✅ Bot leve inicializado sem OCR pesado. Pronto!")
 
 # =========================================
 # MENU
@@ -618,7 +640,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E VERIFICAÇÃO (PROCESSAMENTO EM RAM - SEM SALVAR ARQUIVOS)
+# MENSAGENS E RECEBIMENTO DE COMPROVANTE (LEVE E INSTANTÂNEO)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -639,155 +661,28 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if update.message.photo:
-            dados = clientes.get(usuario_id)
-            is_usdt = dados and dados.get("tipo") == "usdt"
+            dados = clientes.get(usuario_id, {})
+            is_usdt = dados.get("tipo") == "usdt"
 
-            msg_rec = "🔍 Receipt received.\n\n⏳ Performing security check. Please wait..." if is_usdt else "🔍 Comprovante recebido.\n\n⏳ Fazendo análise de segurança. Aguarde..."
-            await update.message.reply_text(msg_rec)
+            # O bot recebe o print, avisa que recebeu e libera imediatamente a etapa do e-mail
+            status_cliente[usuario_id] = "aguardando_email"
+            salvar_estado()
 
-            # === BAIXA A FOTO DIRETAMENTE PARA A MEMÓRIA RAM (SEM SALVAR NO DISCO) ===
-            foto = update.message.photo[-1]
-            arquivo = await foto.get_file()
-            
-            # Baixa para um objeto de bytes na memória
-            image_bytes = await arquivo.download_as_bytearray()
-            
-            # Lê o texto via EasyOCR direto dos bytes usando BytesIO
-            resultado = leitor.readtext(image_bytes, detail=0)
-            texto_original = " ".join(resultado).lower().strip()
-
-            texto_limpo = (
-                texto_original
-                .replace(" ", "")
-                .replace("/", "")
-                .replace("-", "")
-                .replace(".", "")
-                .replace(",", "")
-                .replace("_", "")
-            )
-
-            # REGRA 1: VERIFICAÇÃO DE DUPLICIDADE
-            recibo_atual = texto_original[:300]
-
-            if recibo_atual in recibos_usados:
-                msg_dup = "❌ ERROR: THIS RECEIPT WAS ALREADY USED AND HAS BEEN AUTOMATICALLY DECLINED." if is_usdt else "❌ ERRO: ESTE COMPROVANTE JÁ FOI UTILIZADO EM OUTRO MOMENTO E FOI RECUSADO AUTOMATICAMENTE."
-                await update.message.reply_text(msg_dup)
-                return
-
-            valor = str(dados["valor"])
-
-            # FLUXO SE FOR USDT
-            if is_usdt:
-                if valor in texto_original or valor.replace(".", ",") in texto_original:
-                    recibos_usados.add(recibo_atual)
-                    status_cliente[usuario_id] = "aguardando_email"
-                    salvar_estado()
-
-                    teclado = [[InlineKeyboardButton("📧 SEND EMAIL", callback_data="email")]]
-                    reply_markup = InlineKeyboardMarkup(teclado)
-                    
-                    await update.message.reply_text(
-                        f"✅ {valor} USDT RECEIPT VALIDATED SUCCESSFULY.\n\n📧 Now please submit your email address.",
-                        reply_markup=reply_markup
-                    )
-                else:
-                    teclado = [
-                        [InlineKeyboardButton("🔄 TRY AGAIN", callback_data="pagamento")],
-                        [InlineKeyboardButton("❌ CANCEL", callback_data="cancelar")]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(teclado)
-                    await update.message.reply_text(
-                        f"❌ USDT RECEIPT REJECTED.\n\nThe amount of {valor} USDT was not clearly identified in the image.",
-                        reply_markup=reply_markup
-                    )
-                return
-
-            # REGRA 2: VERIFICAÇÃO DO VALOR
-            valor_ok = False
-            valores_validos = [
-                f"r${valor}", f"r$ {valor}", 
-                f"{valor},00", f"{valor}.00", 
-                f"{valor},0", f"{valor}.0", 
-                f"{valor},", f"{valor}.",
-                f"{valor}"
-            ]
-            for valor_texto in valores_validos:
-                if valor_texto in texto_original or valor_texto in texto_limpo:
-                    valor_ok = True
-                    break
-
-            # REGRA 3: VERIFICAÇÃO DO TITULAR RECEBEDOR
-            nome_ok = (
-                ("natanael" in texto_original and "castro" in texto_original)
-                or "natanael" in texto_original
-                or "castro" in texto_original
-                or "natan" in texto_original
-                or "s castro" in texto_original
-            )
-
-            # REGRA 4: VALIDAÇÃO DA DATA DE HOJE
-            hoje = datetime.now()
-            d = f"{hoje.day:02d}"    
-            m = f"{hoje.month:02d}"  
-            a = str(hoje.year)        
-            a_curto = a[2:]          
-
-            meses_pt = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
-            nome_mes = meses_pt[hoje.month - 1]
-
-            padrao_data_1 = f"{d}{m}{a}"        
-            padrao_data_2 = f"{d}{m}{a_curto}"  
-            padrao_data_3 = f"{d}{nome_mes}"    
-            padrao_data_4 = f"{d}{m}"            
-
-            data_hoje_ok = (
-                padrao_data_1 in texto_limpo 
-                or padrao_data_2 in texto_limpo 
-                or padrao_data_3 in texto_limpo
-                or padrao_data_4 in texto_limpo
-                or f"{d}/{m}/{a}" in texto_original
-                or f"{d}-{m}-{a}" in texto_original
-            )
-
-            for mes_passado in range(1, hoje.month):
-                m_passado_str = f"{mes_passado:02d}"
-                if f"{m_passado_str}{a}" in texto_limpo or f"{m_passado_str}{a_curto}" in texto_limpo:
-                    data_hoje_ok = False 
-
-            if valor_ok and nome_ok and data_hoje_ok:
-                recibos_usados.add(recibo_atual)
-                status_cliente[usuario_id] = "aguardando_email"
-                salvar_estado()
-
-                teclado = [[
-                    InlineKeyboardButton(
-                        "📧 ENVIAR EMAIL",
-                        callback_data="email"
-                    )
-                ]]
-                reply_markup = InlineKeyboardMarkup(teclado)
-
-                await update.message.reply_text(
-                    "✅ COMPROVANTE DO DIA ATUAL VALIDADO COM SUCESSO.\n\n"
-                    "📧 Agora envie seu email.",
-                    reply_markup=reply_markup
+            teclado = [[
+                InlineKeyboardButton(
+                    "📧 SEND EMAIL" if is_usdt else "📧 ENVIAR EMAIL",
+                    callback_data="email"
                 )
-            else:
-                teclado = [
-                    [InlineKeyboardButton("🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
-                    [InlineKeyboardButton("💬 FALA COM ATENDENTE", url="https://t.me/nscnatan")]
-                ]
-                reply_markup = InlineKeyboardMarkup(teclado)
+            ]]
+            reply_markup = InlineKeyboardMarkup(teclado)
 
-                await update.message.reply_text(
-                    "❌ COMPROVANTE RECUSADO (SISTEMA ANTI-FRAUDE).\n\n"
-                    "⚠️ Motivos possíveis:\n"
-                    "1. A data do comprovante não é de HOJE (comprovantes antigos são bloqueados).\n"
-                    "2. O valor do print não bate com o plano escolhido.\n"
-                    "3. O nome do recebedor (Natanael) não foi identificado.\n\n"
-                    "📩 Se isso for um erro, envie um print nítido ou fale com o suporte @nscnatan",
-                    reply_markup=reply_markup
-                )
+            msg_sucesso = (
+                "✅ RECEIPT RECEIVED.\n\n📧 Now please submit your email address." 
+                if is_usdt else 
+                "✅ COMPROVANTE RECEBIDO COM SUCESSO.\n\n📧 Agora envie seu email."
+            )
+
+            await update.message.reply_text(msg_sucesso, reply_markup=reply_markup)
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
@@ -883,7 +778,7 @@ def main():
     app.add_handler(CommandHandler("divida", comando_divida))
     app.add_handler(CommandHandler("excluir", comando_excluir))
 
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
