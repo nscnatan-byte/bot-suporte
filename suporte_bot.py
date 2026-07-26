@@ -97,9 +97,7 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clientes[usuario_id] = {"valor": "0", "plano": "TESTE", "tipo": "pix"}
     status_cliente[usuario_id] = "aguardando_email"
     salvar_estado()
-    teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
-    reply_markup = InlineKeyboardMarkup(teclado)
-    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.", reply_markup=reply_markup)
+    await update.message.reply_text("✅ PAGAMENTO LIBERADO.\n\n📧 Agora envie seu email.")
 
 async def comando_financeiro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id not in [DONO_ID, ATIVADOR_ID]:
@@ -242,7 +240,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💰 Valor: R$ {valor}\n\n"
             f"🔑 **Chave PIX (E-mail):**\n`choplivre@gmail.com`\n\n"
             f"👤 Favorecido: Natanael S Castro\n\n"
-            f"📧 Após realizar o pagamento, envie seu **e-mail** de acesso abaixo:", 
+            f"📧 Após realizar o pagamento, **envie seu e-mail** abaixo para liberar o acesso:", 
             parse_mode="Markdown"
         )
 
@@ -252,7 +250,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clientes[usuario_id] = {"valor": valor_usdt, "plano": planos_usdt[valor_usdt], "tipo": "usdt", "ativado": False}
         status_cliente[usuario_id] = "aguardando_email"
         salvar_estado()
-        await query.message.reply_text(f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please send your email address below:", parse_mode="Markdown")
+        await query.message.reply_text(f"🌍 **USDT PAYMENT**\n\n💰 Amount: {valor_usdt} USDT\n📌 Binance ID: `38862841`\n📌 Address: `TTHDbaSSGhWvmfQfykqxanYWisbNrMDcBE`\n\n📧 After paying, please **send your email** below:", parse_mode="Markdown")
 
     elif query.data == "email":
         status_cliente[usuario_id] = "aguardando_email"
@@ -315,10 +313,10 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
             moeda = "USDT" if dados.get('tipo') == "usdt" else "R$"
             await context.bot.send_message(
                 chat_id=ATIVADOR_ID,
-                text=f"📧 NOVO EMAIL\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
+                text=f"📧 NOVO EMAIL RECEBIDO\n\n📧 {email}\n\n📦 {dados.get('plano')}\n\n💰 {moeda} {dados.get('valor')}",
                 reply_markup=reply_markup
             )
-            await update.message.reply_text("✅ Email recebido.\n\n⏳ Aguarde a ativação.")
+            await update.message.reply_text("✅ E-mail recebido com sucesso!\n\n⏳ Aguarde um instante enquanto validamos o pagamento e ativamos sua conta.")
 
 async def comando_excluir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DONO_ID:
