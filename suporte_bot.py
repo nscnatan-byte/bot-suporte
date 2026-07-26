@@ -18,6 +18,7 @@ threading.Thread(target=run_fake_server, daemon=True).start()
 import json
 import os
 from datetime import datetime
+import google.generativeai as genai
 
 from telegram import (
     Update,
@@ -35,16 +36,20 @@ from telegram.ext import (
 )
 
 # =========================================
-# TOKEN
+# TOKEN E CONFIGURAÇÃO DA IA DO GOOGLE
 # =========================================
 
 TOKEN = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
+
+# Cole aqui a sua chave gratuita da API do Gemini (obtida no Google AI Studio)
+GEMINI_API_KEY = "SUA_CHAVE_GEMINI_AQUI"
+genai.configure(api_key=GEMINI_API_KEY)
 
 # =========================================
 # IDS
 # =========================================
 
-ATIVADOR_ID = 674527541
+ATIVADOR_ID = 929855491
 DONO_ID = 674527541
 
 # =========================================
@@ -97,7 +102,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot leve inicializado sem OCR pesado. Pronto!")
+print("✅ Bot inteligente inicializado com Verificação Gemini AI (Leve). Pronto!")
 
 # =========================================
 # MENU
@@ -609,7 +614,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# MENSAGENS E RECEBIMENTO DE COMPROVANTE (LEVE E INSTANTÂNEO)
+# MENSAGENS E VERIFICAÇÃO INTELIGENTE VIA GEMINI AI
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -631,27 +636,75 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if update.message.photo:
             dados = clientes.get(usuario_id, {})
+            valor_esperado = str(dados.get("valor", "0"))
             is_usdt = dados.get("tipo") == "usdt"
 
-            # O bot recebe o print, avisa que recebeu e libera imediatamente a etapa do e-mail
-            status_cliente[usuario_id] = "aguardando_email"
-            salvar_estado()
+            msg_rec = "🔍 Analyzing receipt with AI..." if is_usdt else "🔍 Analisando comprovante com IA, aguarde..."
+            await update.message.reply_text(msg_rec)
 
-            teclado = [[
-                InlineKeyboardButton(
-                    "📧 SEND EMAIL" if is_usdt else "📧 ENVIAR EMAIL",
-                    callback_data="email"
-                )
-            ]]
-            reply_markup = InlineKeyboardMarkup(teclado)
+            try:
+                # Baixa a foto direto para a memória RAM sem salvar no disco
+                foto = update.message.photo[-1]
+                arquivo = await foto.get_file()
+                image_bytes = await arquivo.download_as_bytearray()
 
-            msg_sucesso = (
-                "✅ RECEIPT RECEIVED.\n\n📧 Now please submit your email address." 
-                if is_usdt else 
-                "✅ COMPROVANTE RECEBIDO COM SUCESSO.\n\n📧 Agora envie seu email."
-            )
+                # Usa a API do Gemini para ler o print instantaneamente
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                
+                prompt = f"""
+                Analise este comprovante de pagamento e responda estritamente em formato JSON com duas chaves:
+                1. "valido": true ou false. (Considere verdadeiro se o comprovante for legítimo, o valor for exatamente igual a {valor_esperado} e o recebedor for Natanael ou Natanael S Castro ou Choplivre).
+                2. "motivo": Explicação curta se for falso.
+                """
 
-            await update.message.reply_text(msg_sucesso, reply_markup=reply_markup)
+                response = model.generate_content([
+                    prompt,
+                    {"mime_type": "image/jpeg", "data": bytes(image_bytes)}
+                ])
+                
+                resposta_texto = response.text.strip().replace("```json", "").replace("```", "")
+                resultado_ia = json.loads(resposta_texto)
+
+                if resultado_ia.get("valido") == True:
+                    status_cliente[usuario_id] = "aguardando_email"
+                    salvar_estado()
+
+                    teclado = [[
+                        InlineKeyboardButton(
+                            "📧 SEND EMAIL" if is_usdt else "📧 ENVIAR EMAIL",
+                            callback_data="email"
+                        )
+                    ]]
+                    reply_markup = InlineKeyboardMarkup(teclado)
+
+                    msg_sucesso = (
+                        "✅ RECEIPT VALIDATED SUCCESSFULLY!\n\n📧 Now please submit your email address."
+                        if is_usdt else
+                        "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email."
+                    )
+
+                    await update.message.reply_text(msg_sucesso, reply_markup=reply_markup)
+                else:
+                    teclado = [
+                        [InlineKeyboardButton("🔄 TRY AGAIN" if is_usdt else "🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
+                        [InlineKeyboardButton("❌ CANCEL" if is_usdt else "❌ CANCELAR", callback_data="cancelar")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(teclado)
+
+                    msg_erro = (
+                        "❌ RECEIPT REJECTED BY AI.\n\nThe amount or receiver did not match our records."
+                        if is_usdt else
+                        "❌ COMPROVANTE RECUSADO PELA IA.\n\n⚠️ O valor ou o recebedor não confere com o plano escolhido. Envie um print válido."
+                    )
+                    await update.message.reply_text(msg_erro, reply_markup=reply_markup)
+
+            except Exception as e:
+                print(f"Erro na IA: {e}")
+                # Fallback de segurança caso dê instabilidade na API
+                status_cliente[usuario_id] = "aguardando_email"
+                salvar_estado()
+                teclado = [[InlineKeyboardButton("📧 ENVIAR EMAIL", callback_data="email")]]
+                await update.message.reply_text("✅ Comprovante recebido!\n\n📧 Agora envie seu email:", reply_markup=InlineKeyboardMarkup(teclado))
 
     elif status == "aguardando_email":
         email = str(update.message.text).strip()
