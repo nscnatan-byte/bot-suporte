@@ -2,13 +2,9 @@ import json
 import os
 import requests
 
-# Nome do arquivo onde os dados ficam salvos
 ARQUIVO_DADOS = "financeiro.json"
-
-# Seu Token do PagBank integrado
 PAGBANK_TOKEN = "DC59C422C80148C1887581D321F1574D"
 
-# Sua lista oficial de clientes e registros
 clientes = [
     {"usuario_id": 1, "email": "carlostenia1@gmail.com", "plano": "1 MÊS", "valor": 0, "historico": 10, "tipo": "pix"},
     {"usuario_id": 2, "email": "2022sp2@gmail.com", "plano": "1 MÊS", "valor": 0, "historico": 10, "tipo": "pix"},
@@ -101,20 +97,12 @@ def painel():
     carregar()
     total = total_faturado()
     total_clientes = len([c for c in clientes if c.get("usuario_id", 0) != 0])
-
-    texto = (
-        "💰 **FINANCEIRO XBOT** 💰\n\n"
-        f"👥 CLIENTES ATIVOS: {total_clientes}\n\n"
-        f"💸 VALOR TOTAL:\n"
-        f"R${total:.2f}"
-    )
-    return texto
+    return f"💰 **FINANCEIRO XBOT** 💰\n\n👥 CLIENTES ATIVOS: {total_clientes}\n\n💸 VALOR TOTAL:\nR${total:.2f}"
 
 def listar_clientes():
     carregar()
     if not clientes:
         return "Nenhum cliente cadastrado."
-
     texto = "📋 **LISTA DE CLIENTES** 📋\n\n"
     for c in clientes[-20:]:  
         if c.get("usuario_id") != 0:
@@ -162,7 +150,7 @@ def resetar_financeiro():
     clientes = []
     salvar()
 
-# Função oficial do PagBank para gerar o Pix Copia e Cola automaticamente
+# Cria o pedido Pix e retorna o Copia e Cola junto com o ID da ordem
 def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.com"):
     url = "https://api.pagseguro.com/orders"
     valor_centavos = int(float(valor_reais) * 100)
@@ -174,7 +162,7 @@ def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.co
     }
     
     payload = {
-        "reference_id": "pedido_bot_01",
+        "reference_id": "pedido_bot_xbot",
         "customer": {
             "name": nome_cliente,
             "email": email_cliente,
@@ -193,9 +181,31 @@ def gerar_pix_pagbank(valor_reais, nome_cliente, email_cliente="cliente@email.co
     
     if response.status_code == 201:
         dados = response.json()
-        return dados["qr_codes"][0]["text"]
+        order_id = dados.get("id")
+        pix_texto = dados["qr_codes"][0]["text"]
+        return order_id, pix_texto
     else:
         print("Erro ao gerar Pix no PagBank:", response.text)
-        return None
+        return None, None
+
+# Verifica na API do PagBank se o pedido foi pago (PAID)
+def verificar_status_pagamento(order_id):
+    if not order_id:
+        return False
+        
+    url = f"https://api.pagseguro.com/orders/{order_id}"
+    headers = {
+        "Authorization": f"Bearer {PAGBANK_TOKEN}",
+        "accept": "application/json"
+    }
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        dados = response.json()
+        charges = dados.get("charges", [])
+        for charge in charges:
+            if charge.get("status") == "PAID":
+                return True
+    return False
 
 carregar()
