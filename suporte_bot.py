@@ -33,7 +33,7 @@ import json
 import os
 
 TOKEN = "8810903311:AAGm-JH5jm1-uMXNznzMe2Tz_YxgFzu2w9A"
-ATIVADOR_ID = 929855491
+ATIVADOR_ID = 674527541
 DONO_ID = 674527541
 BOT_PRIVADO = "https://t.me/suporte_xbotbot"
 
@@ -419,7 +419,7 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 print("BOT ONLINE COM API PAGBANK")
 
-app = Application.builder().token(TOKEN).drop_pending_updates(True).build()
+app = Application.builder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", menu))
 app.add_handler(CommandHandler("4JAB4515", teste))
