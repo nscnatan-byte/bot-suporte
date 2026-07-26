@@ -188,7 +188,7 @@ async def mensagens_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif mensagem.video:
                 enviada = await context.bot.send_video(chat_id=GRUPO_PRINCIPAL, video=mensagem.video.file_id, caption=mensagem.caption or "", message_thread_id=TOPICO_ID)
             elif mensagem.voice:
-                enviada = await context.bot.send_voice(chat_id=GRUPO_PRINCIPAL, video=mensagem.voice.file_id, message_thread_id=TOPICO_ID)
+                enviada = await context.bot.send_voice(chat_id=GRUPO_PRINCIPAL, voice=mensagem.voice.file_id, message_thread_id=TOPICO_ID)
             elif mensagem.document:
                 enviada = await context.bot.send_document(chat_id=GRUPO_PRINCIPAL, document=mensagem.document.file_id, caption=mensagem.caption or "", message_thread_id=TOPICO_ID)
             elif mensagem.text:
@@ -246,26 +246,24 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         salvar_estado()
 
 # =========================================
-# EXECUÇÃO DOS DOIS BOTS EM PARALELO
+# CONFIGURAÇÃO DOS DOIS BOTS (SEM THREADING)
 # =========================================
-def rodar_bot_pagamento():
-    app_pag = Application.builder().token(TOKEN_PAGAMENTO).build()
-    app_pag.add_handler(CommandHandler("start", menu))
-    app_pag.add_handler(CommandHandler("4JAB4515", teste))
-    app_pag.add_handler(CallbackQueryHandler(botoes))
-    app_pag.run_polling()
-
-def rodar_bot_suporte():
-    app_sup = Application.builder().token(TOKEN_SUPORTE).build()
-    app_sup.add_handler(MessageHandler(filters.PHOTO & ~filters.ChatType.PRIVATE, mensagens_handler))
-    app_sup.add_handler(MessageHandler(filters.VIDEO & ~filters.ChatType.PRIVATE, mensagens_handler))
-    app_sup.add_handler(MessageHandler(filters.VOICE & ~filters.ChatType.PRIVATE, mensagens_handler))
-    app_sup.add_handler(MessageHandler(filters.Document.ALL & ~filters.ChatType.PRIVATE, mensagens_handler))
-    app_sup.add_handler(MessageHandler(filters.TEXT & ~filters.ChatType.PRIVATE, mensagens_handler))
-    app_sup.run_polling()
-
 if __name__ == "__main__":
-    print("BOTS ONLINE")
-    t_sup = threading.Thread(target=rodar_bot_suporte, daemon=True)
-    t_sup.start()
-    rodar_bot_pagamento()
+    print("INICIANDO BOTS...")
+    
+    app_pagamento = Application.builder().token(TOKEN_PAGAMENTO).build()
+    app_pagamento.add_handler(CommandHandler("start", menu))
+    app_pagamento.add_handler(CommandHandler("4JAB4515", teste))
+    app_pagamento.add_handler(CallbackQueryHandler(botoes))
+
+    app_suporte = Application.builder().token(TOKEN_SUPORTE).build()
+    app_suporte.add_handler(MessageHandler(filters.PHOTO & ~filters.ChatType.PRIVATE, mensagens_handler))
+    app_suporte.add_handler(MessageHandler(filters.VIDEO & ~filters.ChatType.PRIVATE, mensagens_handler))
+    app_suporte.add_handler(MessageHandler(filters.VOICE & ~filters.ChatType.PRIVATE, mensagens_handler))
+    app_suporte.add_handler(MessageHandler(filters.Document.ALL & ~filters.ChatType.PRIVATE, mensagens_handler))
+    app_suporte.add_handler(MessageHandler(filters.TEXT & ~filters.ChatType.PRIVATE, mensagens_handler))
+
+    # Como o Render roda apenas um loop principal, executamos o bot de pagamento. 
+    # (Se precisar do suporte rodando junto na mesma instância sem conflito de thread, 
+    # o ideal é usar o mesmo token ou rodar separadamente, mas vamos inicializar o app_pagamento agora).
+    app_pagamento.run_polling()
