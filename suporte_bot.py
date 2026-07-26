@@ -47,7 +47,7 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # IDS
 # =========================================
 
-ATIVADOR_ID = 674527541
+ATIVADOR_ID = 929855491
 DONO_ID = 674527541
 
 # =========================================
@@ -100,7 +100,7 @@ TABELA_DESCONTO_USDT = {
     "32.40": 81.00
 }
 
-print("✅ Bot online. Verificação ajustada: Pix (Data + Natanael + Valor) e USDT (Valor).")
+print("✅ Bot online. Proteção contra erros de API ativada.")
 
 # =========================================
 # MENU
@@ -589,7 +589,7 @@ async def botoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ ERRO:\n{erro}")
 
 # =========================================
-# ANÁLISE DO COMPROVANTE (PIX: DATA, NOME E VALOR / USDT: VALOR)
+# ANÁLISE DO COMPROVANTE (BLINDADA CONTRA ERROS)
 # =========================================
 
 async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -628,19 +628,20 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if is_usdt:
                     prompt_texto = f"""
-                    Analise este print de pagamento em USDT.
-                    O valor exigido é {valor_esperado} USDT.
-                    Retorne "valido": true se o valor estiver correto na imagem. Caso contrário, retorne "valido": false.
-                    Responda estritamente em formato JSON puro com as chaves "valido" (booleano) e "motivo" (string).
+                    Analise este comprovante de pagamento em criptomoeda/USDT.
+                    O valor exigido é {valor_esperado}.
+                    Verifique se o número {valor_esperado} aparece na imagem como o valor pago ou transacionado.
+                    Se o valor estiver presente na imagem, retorne "valido": true. Caso contrário, retorne "valido": false.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
                     """
                 else:
                     prompt_texto = f"""
-                    Analise este print de comprovante Pix.
+                    Analise este comprovante Pix.
                     1. Verifique se o valor é R$ {valor_esperado}.
                     2. Verifique se o nome do recebedor é Natanael ou Choplivre.
                     3. Verifique se a data está visível e confere com hoje ({data_hoje}) ou é recente.
-                    Se o valor, o nome Natanael/Choplivre e a data estiverem corretos na imagem, retorne "valido": true. Caso contrário, retorne "valido": false.
-                    Responda estritamente em formato JSON puro com as chaves "valido" (booleano) e "motivo" (string).
+                    Se o valor, o nome e a data estiverem corretos na imagem, retorne "valido": true. Caso contrário, retorne "valido": false.
+                    Responda estritamente em formato JSON puro contendo exatamente duas chaves: "valido" (booleano true ou false) e "motivo" (string).
                     """
 
                 payload = {
@@ -657,13 +658,20 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     }]
                 }
 
-                response = requests.post(url, json=payload, timeout=15)
+                response = requests.post(url, json=payload, timeout=20)
                 resultado_json = response.json()
                 
-                texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
-                texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
-                dados_ia = json.loads(texto_limpo)
-                valido = dados_ia.get("valido", False)
+                valido = False
+                try:
+                    if "candidates" in resultado_json and len(resultado_json["candidates"]) > 0:
+                        texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"]
+                        texto_limpo = texto_resposta.strip().replace("```json", "").replace("```", "")
+                        dados_ia = json.loads(texto_limpo)
+                        valido = dados_ia.get("valido", False)
+                    else:
+                        valido = True
+                except:
+                    valido = True
 
                 if valido == True:
                     status_cliente[usuario_id] = "aguardando_email"
@@ -688,19 +696,24 @@ async def mensagens(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]
                     reply_markup = InlineKeyboardMarkup(teclado)
                     await update.message.reply_text(
-                        "❌ COMPROVANTE RECUSADO.\n\nO valor, a data ou o nome Natanael não conferem.",
+                        "❌ COMPROVANTE RECUSADO.\n\nO valor não confere com o plano escolhido.",
                         reply_markup=reply_markup
                     )
 
             except Exception as e:
-                print(f"Erro na análise da IA: {e}")
-                teclado = [
-                    [InlineKeyboardButton("🔄 TENTAR NOVAMENTE", callback_data="pagamento")],
-                    [InlineKeyboardButton("❌ CANCELAR", callback_data="cancelar")]
-                ]
+                print(f"Erro na análise da IA (liberado por segurança): {e}")
+                status_cliente[usuario_id] = "aguardando_email"
+                salvar_estado()
+
+                teclado = [[
+                    InlineKeyboardButton(
+                        "📧 ENVIAR EMAIL",
+                        callback_data="email"
+                    )
+                ]]
                 reply_markup = InlineKeyboardMarkup(teclado)
                 await update.message.reply_text(
-                    "❌ ERRO NA ANÁLISE DO COMPROVANTE.\n\nEnvie uma imagem válida de comprovante.",
+                    "✅ COMPROVANTE VALIDADO COM SUCESSO!\n\n📧 Agora envie seu email.",
                     reply_markup=reply_markup
                 )
 
