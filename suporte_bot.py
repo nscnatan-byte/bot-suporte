@@ -40,7 +40,7 @@ from telegram.ext import (
 # TOKEN E CONFIGURAÇÕES
 # =========================================
 # Usaremos o token do bot de suporte para gerenciar tudo unificado
-TOKEN = "8810903311:AAF5Kwav8KvySPcb0eIrj-2hmagCKAOqYvw"
+TOKEN = "8977968510:AAEbZAKEeeBbxRsK50eMT1kStaHN9-_j5f4"
 
 GRUPO_PRINCIPAL = -1002260588784
 GRUPO_SUPORTE = -1003985207456
