@@ -1,4 +1,5 @@
 Flask==3.0.2
 gunicorn==21.2.0
 requests==2.31.0
-fx-iqoption==1.0.16
+iqoptionapi==6.0.4
+websocket-client==1.5.2
