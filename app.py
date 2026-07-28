@@ -7,7 +7,7 @@ app = Flask(__name__)
 # Configurações da sua conta IQ Option (Recomendado usar conta Demo para testes!)
 # Substitua abaixo pelos seus dados de login reais
 IQ_EMAIL = "choplivre@gmail.com"
-IQ_SENHA = "SAFira0001974"
+IQ_SENHA = "SAFira1974"
 
 # Conecta na IQ Option ao iniciar o servidor
 print("Conectando à IQ Option...")
