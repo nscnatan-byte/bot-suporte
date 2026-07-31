@@ -1,8 +1,7 @@
 import logging
-import os
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder, 
+    Application, 
     ContextTypes, 
     CommandHandler, 
     MessageHandler, 
@@ -85,10 +84,11 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Meta de 2%: ${DADOS_BANCA['meta_diaria']:.2f}"
     )
 
-if __name__ == '__main__':
+def main():
     TOKEN_TELEGRAM = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
     
-    app = ApplicationBuilder().token(TOKEN_TELEGRAM).build()
+    # Usando o método Application.builder() nativo e totalmente compatível
+    app = Application.builder().token(TOKEN_TELEGRAM).build()
 
     conv_conectar = ConversationHandler(
         entry_points=[CommandHandler('conectar', conectar_inicio)],
@@ -114,3 +114,6 @@ if __name__ == '__main__':
 
     print('Robô iniciado e pronto na nuvem...')
     app.run_polling()
+
+if __name__ == '__main__':
+    main()
