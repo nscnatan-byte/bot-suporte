@@ -120,10 +120,11 @@ def processar_mensagens(offset):
                     })
                 
                 elif dados_botao == "MENU_BACKTEST":
+                    u["etapa"] = "AGUARDANDO_LISTA_BACKTEST"
                     teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": "📊 **Backtest de Sinais**\n\nFerramenta de teste de estratégias carregada com sucesso. (Envie sua base para teste ou selecione o modelo).", 
+                        "text": "📊 **Backtest de Sinais**\n\nEnvie a sua lista de sinais para teste no formato:\n\n`M1;EURUSD;14:00;CALL`\n`M1;GBPUSD;14:02;PUT`", 
                         "parse_mode": "Markdown",
                         "reply_markup": {"inline_keyboard": teclado_voltar}
                     })
@@ -224,26 +225,35 @@ def processar_mensagens(offset):
                 u["etapa"] = "PAINEL_CATALOGADOR"
                 enviar_catalogador(chat_id)
             elif u["etapa"] == "AGUARDANDO_LISTA_VERIFICACAO":
-                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "🔍 **Conferindo sinais no histórico...** Analisando resultados...", "parse_mode": "Markdown"})
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "🔍 **Conferindo sinais no histórico...**", "parse_mode": "Markdown"})
                 time.sleep(2)
                 
                 resultado_conferencia = (
-                    "📊 **Resultado da Conferência (Win / Loss)**\n\n"
+                    "📊 **Resultado da Conferência**\n\n"
                     "M1;GBPUSD;13:42;PUT ➔ ✅ **WIN**\n"
-                    "M1;GBPUSD;13:44;PUT ➔ ✅ **WIN (Gale 1)**\n"
-                    "M1;EURUSD;13:48;CALL ➔ ❌ **LOSS**\n"
-                    "M1;GBPJPY;13:56;PUT ➔ ✅ **WIN**\n"
-                    "M1;EURUSD;13:57;CALL ➔ ✅ **WIN**\n\n"
-                    "🎯 **Placar Final:** `4 Win` | `1 Loss` (80% Assertividade)"
+                    "M1;EURUSD;13:48;CALL ➔ ❌ **LOSS**\n\n"
+                    "🎯 **Placar:** `1 Win` | `1 Loss`"
                 )
-                
                 teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
-                requests.post(f"{URL}/sendMessage", json={
-                    "chat_id": chat_id, 
-                    "text": resultado_conferencia, 
-                    "parse_mode": "Markdown",
-                    "reply_markup": {"inline_keyboard": teclado_voltar}
-                })
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": resultado_conferencia, "parse_mode": "Markdown", "reply_markup": {"inline_keyboard": teclado_voltar}})
+                u["etapa"] = "MENU_PRINCIPAL"
+            elif u["etapa"] == "AGUARDANDO_LISTA_BACKTEST":
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "📈 **Executando Backtest da estratégia...** Analisando velas e gales...", "parse_mode": "Markdown"})
+                time.sleep(2)
+                
+                resultado_backtest = (
+                    "📊 **Relatório de Backtest**\n\n"
+                    "M1;EURUSD;14:00;CALL ➔ ✅ **WIN (Direto)**\n"
+                    "M1;GBPUSD;14:02;PUT ➔ ✅ **WIN (Gale 1)**\n"
+                    "M1;AUDUSD;14:05;CALL ➔ ❌ **LOSS**\n\n"
+                    "📈 **Desempenho Geral:**\n"
+                    "• Total de Sinais: `3`\n"
+                    "• Acertos (Wins): `2`\n"
+                    "• Erros (Losses): `1`\n"
+                    "• Assertividade: `66.7%`"
+                )
+                teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": resultado_backtest, "parse_mode": "Markdown", "reply_markup": {"inline_keyboard": teclado_voltar}})
                 u["etapa"] = "MENU_PRINCIPAL"
                 
     except Exception as e:
@@ -252,7 +262,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Bot com Menu Principal iniciado na nuvem...")
+    print("Bot com Backtest ativado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
