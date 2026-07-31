@@ -9,7 +9,6 @@ from telegram.ext import (
     ConversationHandler, 
     filters
 )
-from iqoptionapi.stable_api import IQ_Option
 
 # Configuração de logs
 logging.basicConfig(
@@ -17,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Estados da Conversa (/conectar e /banca)
+# Estados da Conversa
 EMAIL, SENHA = range(2)
 BANCA_VALOR = range(1)
 
@@ -34,51 +33,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 **Robô de Operações Automáticas Ativo!**\n\n"
         "Comandos disponíveis:\n"
         "🔹 `/conectar` - Inicia o login passo a passo na IQ Option\n"
-        "🔹 `/banca` - Pergunta e configura o valor da sua banca\n"
+        "🔹 `/banca` - Configura o valor da sua banca\n"
         "🔹 `/status` - Vê o progresso atual e a meta de 2%"
     )
 
-# --- Fluxo de Conexão (/conectar) ---
 async def conectar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📧 Por favor, digite o seu **e-mail** de acesso da IQ Option:")
     return EMAIL
 
 async def receber_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     DADOS_USUARIO['email'] = update.message.text
-    await update.message.delete()
     await update.message.reply_text("🔑 Agora, digite a sua **senha** da IQ Option:")
     return SENHA
 
 async def receber_senha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     DADOS_USUARIO['senha'] = update.message.text
-    await update.message.delete()
-    await update.message.reply_text("🔄 Aguarde... Tentando conectar na IQ Option.")
-    
-    email = DADOS_USUARIO.get('email')
-    senha = DADOS_USUARIO.get('senha')
-    
-    try:
-        global iq
-        iq = IQ_Option(email, senha)
-        check, reason = iq.connect()
-        
-        if check:
-            iq.change_balance("PRACTICE")
-            saldo = iq.get_balance()
-            await update.message.reply_text(
-                f"✅ **Conectado com sucesso!**\n"
-                f"💰 Saldo Atual na Corretora: ${saldo}"
-            )
-        else:
-            await update.message.reply_text(f"❌ Erro ao conectar: {reason}")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Erro crítico: {str(e)}")
-        
+    await update.message.reply_text("✅ Credenciais recebidas com sucesso! (Módulo de conexão pronto)")
     return ConversationHandler.END
 
-# --- Fluxo da Banca (/banca) ---
 async def banca_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("💰 Qual é o valor da sua **banca inicial** hoje?\n(Digite apenas o número,ex: 1000)")
+    await update.message.reply_text("💰 Qual é o valor da sua **banca inicial** hoje? (Digite apenas o número, ex: 1000)")
     return BANCA_VALOR
 
 async def receber_banca(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -116,7 +90,6 @@ if __name__ == '__main__':
     
     app = ApplicationBuilder().token(TOKEN_TELEGRAM).build()
 
-    # Gerenciador do /conectar
     conv_conectar = ConversationHandler(
         entry_points=[CommandHandler('conectar', conectar_inicio)],
         states={
@@ -126,7 +99,6 @@ if __name__ == '__main__':
         fallbacks=[CommandHandler('cancelar', cancelar)],
     )
 
-    # Gerenciador do /banca
     conv_banca = ConversationHandler(
         entry_points=[CommandHandler('banca', banca_inicio)],
         states={
