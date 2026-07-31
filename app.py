@@ -6,6 +6,12 @@ TOKEN = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
 URL = f"https://api.telegram.org/bot{TOKEN}"
 
 USUARIOS = {}
+# Lista para armazenar quem já usou o bot (evita duplicar)
+LISTA_CLIENTES = set()
+
+# ⚠️ COLOQUE AQUI O SEU CHAT_ID DO TELEGRAM SE QUISER RECEBER AVISOS QUANDO ALGUÉM ENTRAR
+# (Se não souber, pode deixar vazio ou colocar o seu número de ID)
+MEU_ADMIN_CHAT_ID = None  
 
 PARES_DISPONIVEIS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURGBP", "GBPJPY"]
 
@@ -20,8 +26,22 @@ def inicializar_usuario(chat_id):
             "etapa": "MENU_PRINCIPAL"
         }
 
-def enviar_menu_principal(chat_id):
+def registrar_usuario_ativo(chat_id, user_info=""):
+    if chat_id not in LISTA_CLIENTES:
+        LISTA_CLIENTES.add(chat_id)
+        # Se você quiser que o bot te avise no seu privado quando alguém novo entrar:
+        if MEU_ADMIN_CHAT_ID and str(chat_id) != str(MEU_ADMIN_CHAT_ID):
+            try:
+                requests.post(f"{URL}/sendMessage", json={
+                    "chat_id": MEU_ADMIN_CHAT_ID,
+                    "text": f"🔔 **Novo usuário acessou o bot!**\nID: `{chat_id}`\nNome/Info: {user_info}"
+                })
+            except:
+                pass
+
+def enviar_menu_principal(chat_id, user_info=""):
     inicializar_usuario(chat_id)
+    registrar_usuario_ativo(chat_id, user_info)
     USUARIOS[chat_id]["etapa"] = "MENU_PRINCIPAL"
     
     texto = "🤖 **Menu Principal**\n\nEscolha a opção desejada abaixo:"
@@ -89,7 +109,6 @@ def catalogar_probabilidade_por_horario(selecionados, dias_str, time_vela):
     tf_fmt = "M1" if time_vela == "1M" else ("M5" if time_vela == "5M" else time_vela)
     
     sinais = []
-    # Simula as direções predominantes com maior taxa de vitória histórica por horário
     padroes_predominantes = ["CALL", "PUT", "PUT", "CALL", "PUT"]
     
     for i in range(5):
@@ -126,10 +145,8 @@ def processar_mensagens(offset):
                 
                 if dados_botao == "MENU_PRINCIPAL":
                     enviar_menu_principal(chat_id)
-                
                 elif dados_botao == "MENU_CATALOGADOR":
                     enviar_catalogador(chat_id)
-                
                 elif dados_botao == "MENU_VERIFICAR":
                     u["etapa"] = "AGUARDANDO_LISTA_VERIFICACAO"
                     teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
@@ -139,7 +156,6 @@ def processar_mensagens(offset):
                         "parse_mode": "Markdown",
                         "reply_markup": {"inline_keyboard": teclado_voltar}
                     })
-                
                 elif dados_botao == "MENU_BACKTEST":
                     u["etapa"] = "AGUARDANDO_LISTA_BACKTEST"
                     teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
@@ -149,10 +165,8 @@ def processar_mensagens(offset):
                         "parse_mode": "Markdown",
                         "reply_markup": {"inline_keyboard": teclado_voltar}
                     })
-                
                 elif dados_botao == "VOLTAR_MENU":
                     enviar_menu_principal(chat_id)
-                
                 elif dados_botao.startswith("TOGGLE_"):
                     par = dados_botao.replace("TOGGLE_", "")
                     if par in u["selecionados"]:
@@ -166,19 +180,15 @@ def processar_mensagens(offset):
                         "message_id": message_id,
                         "reply_markup": {"inline_keyboard": novo_teclado}
                     })
-                
                 elif dados_botao == "DIGITAR_DIAS":
                     u["etapa"] = "AGUARDANDO_DIAS"
                     requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o número de **Dias**:", "parse_mode": "Markdown"})
-                
                 elif dados_botao == "DIGITAR_PORC":
                     u["etapa"] = "AGUARDANDO_PORC"
                     requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite a **Porcentagem de Acerto** (Ex: 100):", "parse_mode": "Markdown"})
-                
                 elif dados_botao == "DIGITAR_TIME":
                     u["etapa"] = "AGUARDANDO_TIME"
                     requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o **Time** (Ex: `1M`, `5M`):", "parse_mode": "Markdown"})
-                
                 elif dados_botao == "MUDAR_GALE":
                     if u["gale"] == "0 (Sem Gale)":
                         u["gale"] = "1 Gale"
@@ -193,7 +203,6 @@ def processar_mensagens(offset):
                         "message_id": message_id,
                         "reply_markup": {"inline_keyboard": novo_teclado}
                     })
-                
                 elif dados_botao == "OBTER_SINAIS":
                     if not u["selecionados"]:
                         requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⚠️ Selecione pelo menos um par de moedas!", "parse_mode": "Markdown"})
@@ -225,12 +234,25 @@ def processar_mensagens(offset):
                 
             chat_id = resultado["message"]["chat"]["id"]
             texto = resultado["message"]["text"].strip()
+            user_nome = resultado["message"]["from"].get("first_name", "Usuário")
             
             inicializar_usuario(chat_id)
             u = USUARIOS[chat_id]
             
+            # Comando secreto para você ver quem usou o bot
+            if texto == "/usuarios":
+                total = len(LISTA_CLIENTES)
+                lista_ids = "\n".join([f"• ID: `{uid}`" for uid in LISTA_CLIENTES])
+                msg_admin = (
+                    f"👥 **Painel do Administrador**\n\n"
+                    f"• Total de pessoas que já usaram o bot: **{total}**\n\n"
+                    f"**IDs Registrados:**\n{lista_ids if lista_ids else 'Nenhum ainda.'}"
+                )
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": msg_admin, "parse_mode": "Markdown"})
+                continue
+
             if texto == "/start":
-                enviar_menu_principal(chat_id)
+                enviar_menu_principal(chat_id, user_nome)
             elif u["etapa"] == "AGUARDANDO_DIAS":
                 u["dias"] = texto
                 u["etapa"] = "PAINEL_CATALOGADOR"
@@ -281,7 +303,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Catalogador probabilístico por histórico iniciado na nuvem...")
+    print("Bot com contador de usuários iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
