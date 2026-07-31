@@ -48,7 +48,7 @@ async def receber_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_senha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     DADOS_USUARIO['senha'] = update.message.text
-    await update.message.reply_text("✅ Credenciais recebidas com sucesso! (Módulo de conexão pronto)")
+    await update.message.reply_text("✅ Credenciais recebidas com sucesso!")
     return ConversationHandler.END
 
 async def banca_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
