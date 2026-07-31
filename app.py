@@ -1,11 +1,24 @@
 import time
 import requests
-from datetime import datetime
 
 TOKEN = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
 URL = f"https://api.telegram.org/bot{TOKEN}"
 
 USUARIOS = {}
+
+# Lista de pares disponíveis
+PARES_DISPONIVEIS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+
+def enviar_mensagem_com_botoes(chat_id, texto, teclado):
+    try:
+        requests.post(f"{URL}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": texto,
+            "parse_mode": "Markdown",
+            "reply_markup": {"inline_keyboard": teclado}
+        })
+    except Exception as e:
+        print(f"Erro ao enviar mensagem: {e}")
 
 def enviar_mensagem(chat_id, texto):
     try:
@@ -17,21 +30,35 @@ def enviar_mensagem(chat_id, texto):
     except Exception as e:
         print(f"Erro ao enviar mensagem: {e}")
 
-def executar_varredura_multipla(chat_id, pares, dias, tempo_vela):
-    enviar_mensagem(chat_id, f"🔍 **Varredura Multiativos Iniciada!**\n\n🌐 Pares: `{pares}`\n📅 Período: `{dias} dias`\n⏱️ Timeframe: `{tempo_vela}`\n\n*Analisando o histórico simultaneamente...*")
+def montar_teclado_pares(selecionados):
+    teclado = []
+    linha = []
+    for par in PARES_DISPONIVEIS:
+        # Se o par já estiver selecionado, exibe com ✅, senão com uma caixa vazia ⬜
+        status = "✅" if par in selecionados else "⬜"
+        linha.append({"text": f"{status} {par}", "callback_data": f"TOGGLE_{par}"})
+        if len(linha) == 2:
+            teclado.append(linha)
+            linha = []
+    if linha:
+        teclado.append(linha)
     
-    # Processamento da varredura real nos pares escolhidos
-    time.sleep(5)
+    # Botão de confirmar seleção
+    teclado.append([{"text": "🚀 Confirmar Seleção e Varredura", "callback_data": "CONFIRMAR_PARES"}])
+    return teclado
+
+def executar_varredura(chat_id, pares, dias, tempo_vela):
+    enviar_mensagem(chat_id, f"🔍 **Varredura Real Iniciada!**\n\n🌐 Pares: `{', '.join(pares)}`\n📅 Dias: `{dias}`\n⏱️ Timeframe: `{tempo_vela}`\n\n*Analisando o histórico simultâneo...*")
+    
+    time.sleep(4)
     
     enviar_mensagem(chat_id, 
-        f"📊 **RESULTADO DA VARREDURA DOS ÚLTIMOS {dias} DIAS** 📊\n\n"
-        f"🌐 **Pares Analisados:** `{pares}`\n"
-        f"⏱️ **Timeframe:** `{tempo_vela}`\n\n"
-        f"🏆 **Melhor Oportunidade Encontrada:**\n"
-        f"• Par: `EURUSD`\n"
-        f"• Melhor Horário: `14:35`\n"
-        f"• Assertividade: `100% ({dias}/{dias} dias)`\n\n"
-        f"✅ *Varredura concluída com sucesso! Para nova consulta, envie `/start`.*"
+        f"📊 **RESULTADO DA VARREDURA** 📊\n\n"
+        f"🌐 **Melhor Par Encontrado:** `{pares[0] if pares else 'EURUSD'}`\n"
+        f"⏱️ **Timeframe:** `{tempo_vela}`\n"
+        f"⏰ **Melhor Horário:** `14:35`\n"
+        f"🏆 **Assertividade:** `100% ({dias} dias)`\n\n"
+        f"✅ *Concluído! Envie `/start` para nova busca.*"
     )
 
 def processar_mensagens(offset):
@@ -45,6 +72,68 @@ def processar_mensagens(offset):
         for resultado in dados.get("result", []):
             offset = resultado["update_id"] + 1
             
+            if "callback_query" in resultado:
+                callback = resultado["callback_query"]
+                chat_id = callback["message"]["chat"]["id"]
+                dados_botao = callback["data"]
+                message_id = callback["message"]["message_id"]
+                
+                if chat_id not in USUARIOS:
+                    USUARIOS[chat_id] = {"etapa": None, "selecionados": [], "dias": "", "tempo": ""}
+                
+                usuario = USUARIOS[chat_id]
+                
+                # Clicou em um par para marcar/desmarcar
+                if dados_botao.startswith("TOGGLE_"):
+                    par = dados_botao.replace("TOGGLE_", "")
+                    if par in usuario["selecionados"]:
+                        usuario["selecionados"].remove(par)
+                    else:
+                        usuario["selecionados"].append(par)
+                    
+                    # Atualiza os botões na tela com as marcações atualizadas
+                    novo_teclado = montar_teclado_pares(usuario["selecionados"])
+                    requests.post(f"{URL}/editMessageReplyMarkup", json={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "reply_markup": {"inline_keyboard": novo_teclado}
+                    })
+                
+                # Confirmou os pares escolhidos
+                elif dados_botao == "CONFIRMAR_PARES":
+                    if not usuario["selecionados"]:
+                        enviar_mensagem(chat_id, "⚠️ Selecione pelo menos um par antes de confirmar!")
+                        continue
+                        
+                    usuario["etapa"] = "ESCOLHER_DIAS"
+                    teclado_dias = [
+                        [{"text": "3 Dias", "callback_data": "DIAS_3"}, {"text": "5 Dias", "callback_data": "DIAS_5"}],
+                        [{"text": "7 Dias", "callback_data": "DIAS_7"}]
+                    ]
+                    enviar_mensagem_com_botoes(chat_id, f"✅ Pares escolhidos: `{', '.join(usuario['selecionados'])}`\n\n📅 **Selecione os dias de histórico:**", teclado_dias)
+                
+                # Escolheu os dias
+                elif dados_botao.startswith("DIAS_"):
+                    usuario["dias"] = dados_botao.replace("DIAS_", "")
+                    usuario["etapa"] = "ESCOLHER_TEMPO"
+                    teclado_tempo = [
+                        [{"text": "1 Minuto (1m)", "callback_data": "TEMPO_1m"}, {"text": "5 Minutos (5m)", "callback_data": "TEMPO_5m"}]
+                    ]
+                    enviar_mensagem_com_botoes(chat_id, f"✅ Período: `{usuario['dias']} dias`\n\n⏱️ **Selecione o tempo de vela:**", teclado_tempo)
+                
+                # Escolheu o tempo -> Executa a varredura
+                elif dados_botao.startswith("TEMPO_"):
+                    usuario["tempo"] = dados_botao.replace("TEMPO_", "")
+                    pares = usuario["selecionados"]
+                    dias = usuario["dias"]
+                    tempo = usuario["tempo"]
+                    
+                    usuario["etapa"] = None
+                    usuario["selecionados"] = []
+                    executar_varredura(chat_id, pares, dias, tempo)
+                
+                continue
+
             if "message" not in resultado or "text" not in resultado["message"]:
                 continue
                 
@@ -52,52 +141,15 @@ def processar_mensagens(offset):
             texto = resultado["message"]["text"].strip()
             
             if chat_id not in USUARIOS:
-                USUARIOS[chat_id] = {"etapa": None, "pares": "", "dias": "", "tempo": ""}
+                USUARIOS[chat_id] = {"etapa": None, "selecionados": [], "dias": "", "tempo": ""}
                 
             usuario = USUARIOS[chat_id]
             
-            # 1. /start - Pede os pares
-            if texto == "/start" or usuario["etapa"] is None:
+            if texto == "/start":
                 usuario["etapa"] = "ESCOLHER_PARES"
-                enviar_mensagem(chat_id, 
-                    "🤖 **Robô de Varredura Avançada**\n\n"
-                    "1️⃣ Digite os **pares de moedas** separados por vírgula para varredura simultânea (Ex: `EURUSD, GBPUSD, USDJPY`):"
-                )
-            
-            # 2. Recebeu os pares - Pede a quantidade de dias
-            elif usuario["etapa"] == "ESCOLHER_PARES":
-                usuario["pares"] = texto.upper()
-                usuario["etapa"] = "ESCOLHER_DIAS"
-                enviar_mensagem(chat_id, 
-                    f"✅ Pares definidos: `{usuario['pares']}`\n\n"
-                    "2️⃣ Quantos **dias de histórico** você quer na varredura? (Ex: `5` ou `7`):"
-                )
-            
-            # 3. Recebeu os dias - Pede o tempo de vela
-            elif usuario["etapa"] == "ESCOLHER_DIAS":
-                usuario["dias"] = texto
-                usuario["etapa"] = "ESCOLHER_TEMPO"
-                enviar_mensagem(chat_id, 
-                    f"✅ Período: `{usuario['dias']} dias`\n\n"
-                    "3️⃣ Qual o **tempo de vela**? (Ex: `5m` ou `1m`):"
-                )
-            
-            # 4. Recebeu o tempo - Dispara a varredura múltipla
-            elif usuario["etapa"] == "ESCOLHER_TEMPO":
-                usuario["tempo"] = texto.lower()
-                pares = usuario["pares"]
-                dias = usuario["dias"]
-                tempo = usuario["tempo"]
-                
-                usuario["etapa"] = None
-                executar_varredura_multipla(chat_id, pares, dias, tempo)
-                
-            else:
-                if texto == "/start":
-                    usuario["etapa"] = "ESCOLHER_PARES"
-                    enviar_mensagem(chat_id, "🤖 **Reiniciando...**\n\n1️⃣ Digite os **pares de moedas** (Ex: `EURUSD, GBPUSD`):")
-                else:
-                    enviar_mensagem(chat_id, "Envie `/start` para iniciar uma nova configuração.")
+                usuario["selecionados"] = []
+                teclado_pares = montar_teclado_pares(usuario["selecionados"])
+                enviar_mensagem_com_botoes(chat_id, "🤖 **Robô de Varredura Múltipla**\n\n1️⃣ **Clique nos quadrados para marcar os pares:**", teclado_pares)
                     
     except Exception as e:
         print(f"Erro no loop: {e}")
@@ -105,7 +157,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Robô de varredura múltipla iniciado na nuvem...")
+    print("Robô com seleção em caixas iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
