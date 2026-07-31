@@ -6,15 +6,15 @@ URL = f"https://api.telegram.org/bot{TOKEN}"
 
 USUARIOS = {}
 
-# Os 5 principais pares de moedas para seleção manual
 PARES_DISPONIVEIS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURGBP"]
 
 def inicializar_usuario(chat_id):
     if chat_id not in USUARIOS:
         USUARIOS[chat_id] = {
             "dias": "5",
-            "porcentagem": "5",
+            "porcentagem": "100",
             "time": "1M",
+            "gale": "0 (Sem Gale)",
             "selecionados": ["EURUSD", "GBPUSD"],
             "etapa": "PAINEL"
         }
@@ -22,7 +22,7 @@ def inicializar_usuario(chat_id):
 def montar_teclado_painel(u):
     teclado = []
     
-    # Linha de seleção dos 5 pares (Caixas de marcação)
+    # Linha de seleção dos pares
     linha_pares = []
     for par in PARES_DISPONIVEIS:
         status = "✅" if par in u["selecionados"] else "⬜"
@@ -34,9 +34,9 @@ def montar_teclado_painel(u):
         teclado.append(linha_pares)
         
     # Botões de configuração manual
-    teclado.append([{"text": f"📅 Dias: {u['dias']} (Mudar)", "callback_data": "DIGITAR_DIAS"}, {"text": f"⏱️ Time: {u['time']} (Mudar)", "callback_data": "DIGITAR_TIME"}])
-    teclado.append([{"text": f"🎯 Porcentagem: {u['porcentagem']} (Mudar)", "callback_data": "DIGITAR_PORC"}])
-    teclado.append([{"text": "🔄 Obter / Atualizar Sinais", "callback_data": "OBTER_SINAIS"}, {"text": "❌ Limpar", "callback_data": "LIMPAR"}])
+    teclado.append([{"text": f"📅 Dias: {u['dias']}", "callback_data": "DIGITAR_DIAS"}, {"text": f"⏱️ Time: {u['time']}", "callback_data": "DIGITAR_TIME"}])
+    teclado.append([{"text": f"🎯 Porc: {u['porcentagem']}%", "callback_data": "DIGITAR_PORC"}, {"text": f"🔄 Gales: {u['gale']}", "callback_data": "MUDAR_GALE"}])
+    teclado.append([{"text": "🚀 Obter / Atualizar Sinais", "callback_data": "OBTER_SINAIS"}, {"text": "❌ Limpar", "callback_data": "LIMPAR"}])
     
     return teclado
 
@@ -44,9 +44,10 @@ def enviar_painel(chat_id):
     u = USUARIOS[chat_id]
     texto = (
         f"📊 **Catalogador de Sinais (Mercado Normal)**\n\n"
-        f"🌐 **Pares Marcados:** `{', '.join(u['selecionados']) if u['selecionados'] else 'Nenhum'}`\n"
-        f"📅 **Dias:** `{u['dias']}` | ⏱️ **Time:** `{u['time']}` | 🎯 **Porc:** `{u['porcentagem']}`\n\n"
-        f"Clique nos quadrados para marcar os pares ou altere os dados abaixo:"
+        f"🌐 **Pares:** `{', '.join(u['selecionados']) if u['selecionados'] else 'Nenhum'}`\n"
+        f"📅 **Dias:** `{u['dias']}` | ⏱️ **Time:** `{u['time']}`\n"
+        f"🎯 **Porcentagem:** `{u['porcentagem']}%` | 🔄 **Gales:** `{u['gale']}`\n\n"
+        f"Selecione os pares e parâmetros desejados:"
     )
     
     teclado = montar_teclado_painel(u)
@@ -81,7 +82,6 @@ def processar_mensagens(offset):
                 inicializar_usuario(chat_id)
                 u = USUARIOS[chat_id]
                 
-                # Marcar ou desmarcar pares com caixas
                 if dados_botao.startswith("TOGGLE_"):
                     par = dados_botao.replace("TOGGLE_", "")
                     if par in u["selecionados"]:
@@ -89,7 +89,6 @@ def processar_mensagens(offset):
                     else:
                         u["selecionados"].append(par)
                     
-                    # Atualiza os botões do painel na hora
                     novo_teclado = montar_teclado_painel(u)
                     requests.post(f"{URL}/editMessageReplyMarkup", json={
                         "chat_id": chat_id,
@@ -99,30 +98,47 @@ def processar_mensagens(offset):
                 
                 elif dados_botao == "DIGITAR_DIAS":
                     u["etapa"] = "AGUARDANDO_DIAS"
-                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o número de **Dias** desejado:", "parse_mode": "Markdown"})
+                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o número de **Dias**:", "parse_mode": "Markdown"})
                 
                 elif dados_botao == "DIGITAR_PORC":
                     u["etapa"] = "AGUARDANDO_PORC"
-                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o valor da **Porcentagem** desejado:", "parse_mode": "Markdown"})
+                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite a **Porcentagem de Acerto** (Ex: 100):", "parse_mode": "Markdown"})
                 
                 elif dados_botao == "DIGITAR_TIME":
                     u["etapa"] = "AGUARDANDO_TIME"
-                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o **Time** desejado (Ex: `1M`, `5M`):", "parse_mode": "Markdown"})
+                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⌨️ Digite o **Time** (Ex: `1M`, `5M`):", "parse_mode": "Markdown"})
+                
+                elif dados_botao == "MUDAR_GALE":
+                    # Alterna entre 0, 1 e 2 Gales ao clicar
+                    if u["gale"] == "0 (Sem Gale)":
+                        u["gale"] = "1 Gale"
+                    elif u["gale"] == "1 Gale":
+                        u["gale"] = "2 Gales"
+                    else:
+                        u["gale"] = "0 (Sem Gale)"
+                    
+                    novo_teclado = montar_teclado_painel(u)
+                    requests.post(f"{URL}/editMessageReplyMarkup", json={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "reply_markup": {"inline_keyboard": novo_teclado}
+                    })
                 
                 elif dados_botao == "LIMPAR":
                     u["dias"] = "5"
-                    u["porcentagem"] = "5"
+                    u["porcentagem"] = "100"
                     u["time"] = "1M"
+                    u["gale"] = "0 (Sem Gale)"
                     u["selecionados"] = ["EURUSD", "GBPUSD"]
                     u["etapa"] = "PAINEL"
                     enviar_painel(chat_id)
                 
                 elif dados_botao == "OBTER_SINAIS":
                     if not u["selecionados"]:
-                        requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⚠️ Selecione pelo menos um par de moedas nas caixas acima!", "parse_mode": "Markdown"})
+                        requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "⚠️ Selecione pelo menos um par de moedas!", "parse_mode": "Markdown"})
                         continue
                         
-                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": f"🔍 **Varredura iniciada!**\nPares: {', '.join(u['selecionados'])}\nDias: {u['dias']} | Time: {u['time']}\nAguarde...", "parse_mode": "Markdown"})
+                    requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": f"🔍 **Varredura iniciada!**\nPares: {', '.join(u['selecionados'])}\nDias: {u['dias']} | Time: {u['time']} | Gales: {u['gale']}\nAguarde...", "parse_mode": "Markdown"})
                     time.sleep(3)
                     
                     lista_resultados = (
@@ -130,7 +146,6 @@ def processar_mensagens(offset):
                         "AUDUSD - 19:24 - PUT\n"
                         "AUDUSD - 19:25 - PUT\n"
                         "EURUSD - 19:29 - CALL\n"
-                        "EURGBP - 19:30 - CALL\n"
                         "GBPUSD - 19:32 - PUT"
                     )
                     requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": lista_resultados, "parse_mode": "Markdown"})
@@ -169,7 +184,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Catalogador com caixas de seleção manual iniciado na nuvem...")
+    print("Catalogador com Gales iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
