@@ -1,5 +1,4 @@
 import logging
-import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
@@ -43,7 +42,7 @@ async def set_banca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🎯 Meta de 2% (Lucro Alvo): ${DADOS_BANCA['meta_diaria']:.2f}"
         )
     except ValueError:
-        await update.message.reply_text("❌ Por favor, insira um número válido para a banca.")
+        await update.message.reply_text("❌ Por favor, insira um número válido para la banca.")
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -54,17 +53,14 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 if __name__ == '__main__':
-    # Puxa o token de forma segura do ambiente da nuvem
-    TOKEN_TELEGRAM = os.environ.get("TOKEN_TELEGRAM")
+    # Token configurado diretamente no código
+    TOKEN_TELEGRAM = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
     
-    if not TOKEN_TELEGRAM:
-        print("❌ Erro: A variável de ambiente TOKEN_TELEGRAM não está configurada!")
-    else:
-        app = ApplicationBuilder().token(TOKEN_TELEGRAM).build()
+    app = ApplicationBuilder().token(TOKEN_TELEGRAM).build()
 
-        app.add_handler(CommandHandler('start', start))
-        app.add_handler(CommandHandler('banca', set_banca))
-        app.add_handler(CommandHandler('status', status))
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('banca', set_banca))
+    app.add_handler(CommandHandler('status', status))
 
-        print('Robô iniciado e pronto na nuvem...')
-        app.run_polling()
+    print('Robô iniciado e pronto na nuvem...')
+    app.run_polling()
