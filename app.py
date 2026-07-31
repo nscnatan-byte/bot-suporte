@@ -1,5 +1,5 @@
 import logging
-import asyncio
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
@@ -54,14 +54,17 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 if __name__ == '__main__':
-    # Insira o Token do seu Bot do Telegram gerado no BotFather
-    TOKEN_TELEGRAM = 'SEU_TOKEN_DO_BOT_AQUI'
+    # Puxa o token de forma segura do ambiente da nuvem
+    TOKEN_TELEGRAM = os.environ.get("TOKEN_TELEGRAM")
     
-    app = ApplicationBuilder().token(TOKEN_TELEGRAM).build()
+    if not TOKEN_TELEGRAM:
+        print("❌ Erro: A variável de ambiente TOKEN_TELEGRAM não está configurada!")
+    else:
+        app = ApplicationBuilder().token(TOKEN_TELEGRAM).build()
 
-    app.add_handler(CommandHandler('start', start))
-    app.add_handler(CommandHandler('banca', set_banca))
-    app.add_handler(CommandHandler('status', status))
+        app.add_handler(CommandHandler('start', start))
+        app.add_handler(CommandHandler('banca', set_banca))
+        app.add_handler(CommandHandler('status', status))
 
-    print('Robô iniciado e pronto na nuvem...')
-    app.run_polling()
+        print('Robô iniciado e pronto na nuvem...')
+        app.run_polling()
