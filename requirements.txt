@@ -1,2 +1,3 @@
-python-telegram-bot
-IQOptionAPI
+python-telegram-bot==20.7
+IQOptionAPI==0.5
+websockets==10.4
