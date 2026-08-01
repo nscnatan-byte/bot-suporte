@@ -1,7 +1,7 @@
 import time
 import requests
 from datetime import datetime, timedelta
-from iqoptionapi.api import IQ_Option
+from iqoptionapi.stable_api import IQ_Option
 
 TOKEN = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
 URL = f"https://api.telegram.org/bot{TOKEN}"
@@ -503,7 +503,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Bot com login individual por usuário iniciado...")
+    print("Bot com stable_api iniciado...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
