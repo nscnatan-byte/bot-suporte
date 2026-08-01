@@ -1,4 +1,5 @@
 import time
+import random
 import requests
 from datetime import datetime, timedelta
 
@@ -109,14 +110,16 @@ def catalogar_melhores_sinais(u):
     passo = 1 if tf_fmt == "M1" else 5
     tipo_mercado = "IQ Option OTC" if u["mercado"] == "OTC" else "Normal"
     
+    opcoes_direcao = ["CALL", "PUT"]
+    
     for i in range(60):
         agora += timedelta(minutes=passo)
         horario_str = agora.strftime("%H:%M")
         
         par_escolhido = u["selecionados"][i % len(u["selecionados"])]
         
-        # Alterna dinamicamente entre CALL e PUT de forma mista e realista
-        direcao = "PUT" if (agora.minute % 3 == 0 or i % 2 != 0) else "CALL"
+        # Alterna dinamicamente entre CALL e PUT de forma equilibrada
+        direcao = opcoes_direcao[(i + len(par_escolhido)) % 2]
         
         assertividade_simulada = 100 if (i % 2 == 0 or porcentagem_min <= 90) else 85
         
@@ -232,7 +235,7 @@ def processar_mensagens(offset):
                         
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"🔍 **Conectando ao histórico da corretora...** Filtrando os melhores sinais...", 
+                        "text": f"🔍 **Analisando dados do mercado...** Filtrando os melhores sinais...", 
                         "parse_mode": "Markdown"
                     })
                     time.sleep(2)
@@ -319,7 +322,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Bot catalogador completo iniciado na nuvem...")
+    print("Bot catalogador com direções mistas iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
