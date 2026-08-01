@@ -141,6 +141,10 @@ def catalogar_melhores_sinais_real(u):
     if not u["logado"] or not u["iq_api"]:
         return "⚠️ Você precisa conectar sua conta da IQ Option primeiro no menu principal!"
         
+    api = u["iq_api"]
+    if not api.check_connect():
+        api.connect()
+        
     tf_fmt = "M1" if u["time"] == "1M" else ("M5" if u["time"] == "5M" else u["time"])
     duracao_seg = 60 if tf_fmt == "M1" else 300
     porcentagem_min = int(u["porcentagem"]) if u["porcentagem"].isdigit() else 100
@@ -152,7 +156,9 @@ def catalogar_melhores_sinais_real(u):
     
     for par in u["selecionados"]:
         try:
-            velas = u["iq_api"].get_candles(par, duracao_seg, 300, end_time)
+            if not api.check_connect():
+                api.connect()
+            velas = api.get_candles(par, duracao_seg, 300, end_time)
             if not velas:
                 continue
             
@@ -196,6 +202,10 @@ def verificar_lista_sinais_real(chat_id, texto_lista):
     if not u["logado"] or not u["iq_api"]:
         return "⚠️ Você precisa conectar sua conta da IQ Option primeiro!"
         
+    api = u["iq_api"]
+    if not api.check_connect():
+        api.connect()
+        
     linhas = texto_lista.strip().split("\n")
     resultados = []
     wins_direto = 0
@@ -228,7 +238,9 @@ def verificar_lista_sinais_real(chat_id, texto_lista):
             duracao = 60 if tf == "M1" else 300
             
             try:
-                velas = u["iq_api"].get_candles(par, duracao, 1000, timestamp_fim)
+                if not api.check_connect():
+                    api.connect()
+                velas = api.get_candles(par, duracao, 1000, timestamp_fim)
                 vela_encontrada = None
                 
                 for v in velas:
@@ -503,7 +515,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Bot com stable_api iniciado...")
+    print("Bot com reconexão automática iniciado...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
