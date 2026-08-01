@@ -1,7 +1,7 @@
 import time
 import requests
 from datetime import datetime, timedelta
-from iqoptionapi.stable_api import IQ_Option
+from iqoptionapi.api import IQ_Option
 
 TOKEN = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
 URL = f"https://api.telegram.org/bot{TOKEN}"
@@ -86,7 +86,7 @@ def montar_teclado_catalogador(u):
     teclado.append([{"text": f"📅 Dias: {u['dias']}", "callback_data": "DIGITAR_DIAS"}, {"text": f"⏱️ Time: {u['time']}", "callback_data": "DIGITAR_TIME"}])
     teclado.append([{"text": f"🎯 Porc: {u['porcentagem']}%", "callback_data": "DIGITAR_PORC"}, {"text": f"🔄 Gales: {u['gale']}", "callback_data": "MUDAR_GALE"}])
     teclado.append([{"text": "🚀 Obter / Atualizar Sinais Reais", "callback_data": "OBTER_SINAIS"}])
-    teclado.append([{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}])
+    teclado.append([{"text": "🔙 Voltar ao Menu", "callback_data": "VOLTAR_MENU"}])
     
     return teclado
 
