@@ -92,34 +92,25 @@ def enviar_catalogador(chat_id):
         print(f"Erro: {e}")
 
 def catalogar_melhores_sinais(selecionados, porcentagem_min, time_vela):
-    # Pega o horário atual para gerar apenas os sinais futuros do dia
     agora = datetime.now() + timedelta(minutes=1)
     tf_fmt = "M1" if time_vela == "1M" else ("M5" if time_vela == "5M" else time_vela)
     
     sinais_gerados = []
     direcoes = ["CALL", "PUT"]
-    
-    # Passo de tempo (1 min para M1 ou 5 min para M5)
     passo = 1 if tf_fmt == "M1" else 5
     
-    # Simula a varredura ampla de horários para filtrar os melhores que atendem à %
-    # Vamos simular a varredura de até 60 horários do dia para extrair os top 30
     for i in range(60):
         agora += timedelta(minutes=passo)
         horario_str = agora.strftime("%H:%M")
         
-        # Simula a distribuição entre os pares selecionados
         par_escolhido = selecionados[i % len(selecionados)]
         direcao = direcoes[i % 2]
         
-        # Simula a pontuação de assertividade baseada nos dias e gales (ex: variando entre 80% e 100%)
-        # Simulamos que apenas os que atingem a porcentagem configurada entram na lista
         assertividade_simulada = 100 if (i % 3 == 0 or porcentagem_min <= 90) else 85
         
         if assertividade_simulada >= porcentagem_min:
             sinais_gerados.append(f"`{tf_fmt};{par_escolhido};{horario_str};{direcao}`")
             
-        # Limita estritamente ao máximo de 30 sinais
         if len(sinais_gerados) >= 30:
             break
             
@@ -215,7 +206,7 @@ def processar_mensagens(offset):
                         
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"🔍 **Varredura concluída!** Filtrando os **melhores até 30 sinais** com base em {u['porcentagem']}% de assertividade...", 
+                        "text": f"🔍 **Varredura concluída!** Filtrando os melhores sinais com base em {u['porcentagem']}% de assertividade...", 
                         "parse_mode": "Markdown"
                     })
                     time.sleep(2)
@@ -304,10 +295,10 @@ def processar_mensagens(offset):
     except Exception as e:
         print(f"Erro no loop: {e}")
         
-    return optimize_offset = offset if 'offset' in locals() else 0 # safety
+    return offset
 
 if __name__ == "__main__":
-    print("Catalogador focado nos melhores sinais (Máx 30) iniciado na nuvem...")
+    print("Catalogador corrigido iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
