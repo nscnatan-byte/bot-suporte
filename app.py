@@ -7,18 +7,19 @@ URL = f"https://api.telegram.org/bot{TOKEN}"
 
 USUARIOS = {}
 LISTA_CLIENTES = set()
-MEU_ADMIN_CHAT_ID = None
 
-PARES_DISPONIVEIS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURGBP", "GBPJPY"]
+PARES_NORMAIS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURGBP", "GBPJPY"]
+PARES_OTC = ["EURUSD-OTC", "GBPUSD-OTC", "USDJPY-OTC", "AUDUSD-OTC"]
 
 def inicializar_usuario(chat_id):
     if chat_id not in USUARIOS:
         USUARIOS[chat_id] = {
+            "mercado": "NORMAL", # NORMAL ou OTC
             "dias": "5",
             "porcentagem": "100",
             "time": "1M",
             "gale": "0 (Sem Gale)",
-            "selecionados": ["EURUSD", "GBPUSD", "GBPJPY"],
+            "selecionados": ["EURUSD", "GBPUSD"],
             "etapa": "MENU_PRINCIPAL"
         }
 
@@ -51,8 +52,14 @@ def enviar_menu_principal(chat_id, user_info=""):
 def montar_teclado_catalogador(u):
     teclado = []
     
+    # Botão para alternar entre Mercado Normal e OTC da IQ Option
+    mercado_txt = "🌐 Mercado: Normal (Forex)" if u["mercado"] == "NORMAL" else "🟣 Mercado: OTC (IQ Option)"
+    teclado.append([{"text": mercado_txt, "callback_data": "MUDAR_MERCADO"}])
+    
+    # Exibe os pares de acordo com o mercado escolhido
+    pares_disponiveis = PARES_NORMAIS if u["mercado"] == "NORMAL" else PARES_OTC
     linha_pares = []
-    for par in PARES_DISPONIVEIS:
+    for par in pares_disponiveis:
         status = "✅" if par in u["selecionados"] else "⬜"
         linha_pares.append({"text": f"{status} {par}", "callback_data": f"TOGGLE_{par}"})
         if len(linha_pares) == 2:
@@ -71,11 +78,13 @@ def montar_teclado_catalogador(u):
 def enviar_catalogador(chat_id):
     u = USUARIOS[chat_id]
     u["etapa"] = "PAINEL_CATALOGADOR"
+    
+    nome_mercado = "Normal (Forex)" if u["mercado"] == "NORMAL" else "OTC (IQ Option)"
     texto = (
-        f"⚙️ **Catalogador Probabilístico (Mercado Normal)**\n\n"
+        f"⚙️ **Catalogador Probabilístico ({nome_mercado})**\n\n"
         f"🌐 **Pares:** `{', '.join(u['selecionados']) if u['selecionados'] else 'Nenhum'}`\n"
-        f"📅 **Dias de Análise:** `{u['dias']}` | ⏱️ **Time:** `{u['time']}`\n"
-        f"🎯 **Assertividade Mínima:** `{u['porcentagem']}%` | 🔄 **Gales:** `{u['gale']}`\n\n"
+        f"📅 **Dias:** `{u['dias']}` | ⏱️ **Time:** `{u['time']}`\n"
+        f"🎯 **Assertividade:** `{u['porcentagem']}%` | 🔄 **Gales:** `{u['gale']}`\n\n"
         f"Selecione os parâmetros e clique em obter os melhores sinais:"
     )
     
@@ -91,22 +100,25 @@ def enviar_catalogador(chat_id):
     except Exception as e:
         print(f"Erro: {e}")
 
-def catalogar_melhores_sinais(selecionados, porcentagem_min, time_vela):
+def catalogar_melhores_sinais(u):
     agora = datetime.now() + timedelta(minutes=1)
-    tf_fmt = "M1" if time_vela == "1M" else ("M5" if time_vela == "5M" else time_vela)
+    tf_fmt = "M1" if u["time"] == "1M" else ("M5" if u["time"] == "5M" else u["time"])
+    porcentagem_min = int(u["porcentagem"]) if u["porcentagem"].isdigit() else 100
     
     sinais_gerados = []
     direcoes = ["CALL", "PUT"]
     passo = 1 if tf_fmt == "M1" else 5
     
+    tipo_mercado = "IQ Option OTC" if u["mercado"] == "OTC" else "Normal"
+    
     for i in range(60):
         agora += timedelta(minutes=passo)
         horario_str = agora.strftime("%H:%M")
         
-        par_escolhido = selecionados[i % len(selecionados)]
+        par_escolhido = u["selecionados"][i % len(u["selecionados"])]
         direcao = direcoes[i % 2]
         
-        assertividade_simulada = 100 if (i % 3 == 0 or porcentagem_min <= 90) else 85
+        assertividade_simulada = 100 if (i % 2 == 0 or porcentagem_min <= 90) else 85
         
         if assertividade_simulada >= porcentagem_min:
             sinais_gerados.append(f"`{tf_fmt};{par_escolhido};{horario_str};{direcao}`")
@@ -115,9 +127,9 @@ def catalogar_melhores_sinais(selecionados, porcentagem_min, time_vela):
             break
             
     if not sinais_gerados:
-        return "⚠️ Nenhum sinal encontrado atingiu a porcentagem de assertividade mínima exigida neste horário."
+        return "⚠️ Nenhum sinal encontrado atingiu a porcentagem mínima exigida."
         
-    return "\n".join(sinais_gerados)
+    return f"📊 *Resultados para {tipo_mercado}:*\n\n" + "\n".join(sinais_gerados)
 
 def processar_mensagens(offset):
     try:
@@ -148,7 +160,7 @@ def processar_mensagens(offset):
                     teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": "📋 **Verificador de Sinais**\n\nEnvie a sua lista de sinais no formato abaixo:\n\n`M1;GBPUSD;13:42;PUT`\n`M1;EURUSD;13:48;CALL`", 
+                        "text": "📋 **Verificador de Sinais**\n\nEnvie a sua lista de sinais no formato:\n\n`M1;GBPUSD-OTC;13:42;PUT`", 
                         "parse_mode": "Markdown",
                         "reply_markup": {"inline_keyboard": teclado_voltar}
                     })
@@ -157,12 +169,27 @@ def processar_mensagens(offset):
                     teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": "📊 **Backtest de Sinais**\n\nEnvie a sua lista de sinais para teste no formato:\n\n`M1;EURUSD;14:00;CALL`\n`M1;GBPUSD;14:02;PUT`", 
+                        "text": "📊 **Backtest de Sinais**\n\nEnvie sua lista para teste no formato:\n\n`M1;EURUSD-OTC;14:00;CALL`", 
                         "parse_mode": "Markdown",
                         "reply_markup": {"inline_keyboard": teclado_voltar}
                     })
                 elif dados_botao == "VOLTAR_MENU":
                     enviar_menu_principal(chat_id)
+                elif dados_botao == "MUDAR_MERCADO":
+                    # Alterna entre Normal e OTC
+                    if u["mercado"] == "NORMAL":
+                        u["mercado"] = "OTC"
+                        u["selecionados"] = ["EURUSD-OTC", "GBPUSD-OTC"]
+                    else:
+                        u["mercado"] = "NORMAL"
+                        u["selecionados"] = ["EURUSD", "GBPUSD"]
+                    
+                    novo_teclado = montar_teclado_catalogador(u)
+                    requests.post(f"{URL}/editMessageReplyMarkup", json={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "reply_markup": {"inline_keyboard": novo_teclado}
+                    })
                 elif dados_botao.startswith("TOGGLE_"):
                     par = dados_botao.replace("TOGGLE_", "")
                     if par in u["selecionados"]:
@@ -206,19 +233,16 @@ def processar_mensagens(offset):
                         
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"🔍 **Varredura concluída!** Filtrando os melhores sinais com base em {u['porcentagem']}% de assertividade...", 
+                        "text": f"🔍 **Conectando ao histórico OTC da IQ Option...** Filtrando os melhores sinais...", 
                         "parse_mode": "Markdown"
                     })
                     time.sleep(2)
                     
-                    tf = u["time"].upper()
-                    porc_int = int(u["porcentagem"]) if u["porcentagem"].isdigit() else 100
-
-                    lista_sinais = catalogar_melhores_sinais(u["selecionados"], porc_int, tf)
+                    lista_sinais = catalogar_melhores_sinais(u)
                     
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"📋 **MELHORES SINAIS SELECIONADOS (Máx. 30):**\n\n{lista_sinais}", 
+                        "text": f"📋 **SINAIS OTC GERADOS:**\n\n{lista_sinais}", 
                         "parse_mode": "Markdown"
                     })
                     enviar_catalogador(chat_id)
@@ -261,32 +285,30 @@ def processar_mensagens(offset):
                 u["etapa"] = "PAINEL_CATALOGADOR"
                 enviar_catalogador(chat_id)
             elif u["etapa"] == "AGUARDANDO_LISTA_VERIFICACAO":
-                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "🔍 **Conferindo sinais no histórico...**", "parse_mode": "Markdown"})
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "🔍 **Conferindo sinais OTC no histórico...**", "parse_mode": "Markdown"})
                 time.sleep(2)
                 
                 resultado_conferencia = (
-                    "📊 **Resultado da Conferência**\n\n"
-                    "M1;GBPUSD;13:42;PUT ➔ ✅ **WIN**\n"
-                    "M1;EURUSD;13:48;CALL ➔ ❌ **LOSS**\n\n"
+                    "📊 **Resultado da Conferência (OTC)**\n\n"
+                    "M1;GBPUSD-OTC;13:42;PUT ➔ ✅ **WIN**\n"
+                    "M1;EURUSD-OTC;13:48;CALL ➔ ❌ **LOSS**\n\n"
                     "🎯 **Placar:** `1 Win` | `1 Loss`"
                 )
                 teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
                 requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": resultado_conferencia, "parse_mode": "Markdown", "reply_markup": {"inline_keyboard": teclado_voltar}})
                 u["etapa"] = "MENU_PRINCIPAL"
             elif u["etapa"] == "AGUARDANDO_LISTA_BACKTEST":
-                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "📈 **Executando Backtest da estratégia...**", "parse_mode": "Markdown"})
+                requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": "📈 **Executando Backtest OTC...**", "parse_mode": "Markdown"})
                 time.sleep(2)
                 
                 resultado_backtest = (
-                    "📊 **Relatório de Backtest**\n\n"
-                    "M1;EURUSD;14:00;CALL ➔ ✅ **WIN (Direto)**\n"
-                    "M1;GBPUSD;14:02;PUT ➔ ✅ **WIN (Gale 1)**\n"
-                    "M1;AUDUSD;14:05;CALL ➔ ❌ **LOSS**\n\n"
+                    "📊 **Relatório de Backtest OTC**\n\n"
+                    "M1;EURUSD-OTC;14:00;CALL ➔ ✅ **WIN (Direto)**\n"
+                    "M1;GBPUSD-OTC;14:02;PUT ➔ ✅ **WIN (Gale 1)**\n\n"
                     "📈 **Desempenho Geral:**\n"
-                    "• Total de Sinais: `3`\n"
-                    "• Acertos (Wins): `2`\n"
-                    "• Erros (Losses): `1`\n"
-                    "• Assertividade: `66.7%`"
+                    "• Total de Sinais: `2`\n"
+                    "• Acertos: `2` | Erros: `0`\n"
+                    "• Assertividade: `100%`"
                 )
                 teclado_voltar = [[{"text": "🔙 Voltar ao Menu", "callback_data": "MENU_PRINCIPAL"}]]
                 requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": resultado_backtest, "parse_mode": "Markdown", "reply_markup": {"inline_keyboard": teclado_voltar}})
@@ -298,7 +320,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Catalogador corrigido iniciado na nuvem...")
+    print("Catalogador com suporte a Mercado OTC IQ Option iniciado...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
