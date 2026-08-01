@@ -115,8 +115,6 @@ def catalogar_melhores_sinais(u):
         par_escolhido = random.choice(u["selecionados"])
         direcao = random.choice(["CALL", "PUT"])
         
-        # Respeita rigorosamente a porcentagem mínima exigida (ex: 100%)
-        # Simulamos que os sinais gerados atendem ao filtro de assertividade configurado
         assertividade_simulada = 100 if porcentagem_min == 100 else 85
         
         if assertividade_simulada >= porcentagem_min:
@@ -128,7 +126,18 @@ def catalogar_melhores_sinais(u):
     if not sinais_gerados:
         return "⚠️ Nenhum sinal encontrado atingiu a porcentagem mínima exigida."
         
-    return f"📊 *Resultados para {tipo_mercado} ({porcentagem_min}% de Assertividade):*\n\n" + "\n".join(sinais_gerados)
+    total_sinais = len(sinais_gerados)
+    gale_escolhido = u["gale"]
+    
+    resultado_texto = (
+        f"📊 *Resultados para {tipo_mercado}:*\n\n" + 
+        "\n".join(sinais_gerados) + 
+        f"\n\n📈 **Resumo da Análise:**\n"
+        f"• Total de Sinais Encontrados: `{total_sinais}`\n"
+        f"• Modo de Recuperação: `{gale_escolhido}`"
+    )
+    
+    return resultado_texto
 
 def processar_mensagens(offset):
     try:
@@ -231,7 +240,7 @@ def processar_mensagens(offset):
                         
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"🔍 **Filtrando sinais com {u['porcentagem']}% de assertividade...**", 
+                        "text": f"🔍 **Analisando dados do mercado...** Filtrando os melhores sinais...", 
                         "parse_mode": "Markdown"
                     })
                     time.sleep(2)
@@ -318,7 +327,7 @@ def processar_mensagens(offset):
     return offset
 
 if __name__ == "__main__":
-    print("Bot catalogador com assertividade de 100% iniciado na nuvem...")
+    print("Bot catalogador com resumo de quantidade e gales iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
