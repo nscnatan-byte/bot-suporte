@@ -53,7 +53,7 @@ def enviar_menu_principal(chat_id, user_info=""):
 def montar_teclado_catalogador(u):
     teclado = []
     
-    mercado_txt = "🌐 Mercado: Normal (Forex)" if u["mercado"] == "NORMAL" else "🟣 Mercado: OTC (IQ Option)"
+    mercado_txt = "🌐 Mercado: Normal (Binarias)" if u["mercado"] == "NORMAL" else "🟣 Mercado: OTC (IQ Option)"
     teclado.append([{"text": mercado_txt, "callback_data": "MUDAR_MERCADO"}])
     
     pares_disponiveis = PARES_NORMAIS if u["mercado"] == "NORMAL" else PARES_OTC
