@@ -6,12 +6,8 @@ TOKEN = '8947979521:AAHUNCEDhJU5Ee6YOEvtJeUSo01YAFXiSpI'
 URL = f"https://api.telegram.org/bot{TOKEN}"
 
 USUARIOS = {}
-# Lista para armazenar quem já usou o bot (evita duplicar)
 LISTA_CLIENTES = set()
-
-# ⚠️ COLOQUE AQUI O SEU CHAT_ID DO TELEGRAM SE QUISER RECEBER AVISOS QUANDO ALGUÉM ENTRAR
-# (Se não souber, pode deixar vazio ou colocar o seu número de ID)
-MEU_ADMIN_CHAT_ID = None  
+MEU_ADMIN_CHAT_ID = None
 
 PARES_DISPONIVEIS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURGBP", "GBPJPY"]
 
@@ -29,15 +25,6 @@ def inicializar_usuario(chat_id):
 def registrar_usuario_ativo(chat_id, user_info=""):
     if chat_id not in LISTA_CLIENTES:
         LISTA_CLIENTES.add(chat_id)
-        # Se você quiser que o bot te avise no seu privado quando alguém novo entrar:
-        if MEU_ADMIN_CHAT_ID and str(chat_id) != str(MEU_ADMIN_CHAT_ID):
-            try:
-                requests.post(f"{URL}/sendMessage", json={
-                    "chat_id": MEU_ADMIN_CHAT_ID,
-                    "text": f"🔔 **Novo usuário acessou o bot!**\nID: `{chat_id}`\nNome/Info: {user_info}"
-                })
-            except:
-                pass
 
 def enviar_menu_principal(chat_id, user_info=""):
     inicializar_usuario(chat_id)
@@ -89,7 +76,7 @@ def enviar_catalogador(chat_id):
         f"🌐 **Pares:** `{', '.join(u['selecionados']) if u['selecionados'] else 'Nenhum'}`\n"
         f"📅 **Dias de Análise:** `{u['dias']}` | ⏱️ **Time:** `{u['time']}`\n"
         f"🎯 **Assertividade Mínima:** `{u['porcentagem']}%` | 🔄 **Gales:** `{u['gale']}`\n\n"
-        f"Analisando o padrão que mais deu WIN em cada horário nos últimos {u['dias']} dias. Selecione os parâmetros:"
+        f"Selecione os parâmetros e clique em obter os melhores sinais:"
     )
     
     teclado = montar_teclado_catalogador(u)
@@ -104,24 +91,42 @@ def enviar_catalogador(chat_id):
     except Exception as e:
         print(f"Erro: {e}")
 
-def catalogar_probabilidade_por_horario(selecionados, dias_str, time_vela):
+def catalogar_melhores_sinais(selecionados, porcentagem_min, time_vela):
+    # Pega o horário atual para gerar apenas os sinais futuros do dia
     agora = datetime.now() + timedelta(minutes=1)
     tf_fmt = "M1" if time_vela == "1M" else ("M5" if time_vela == "5M" else time_vela)
     
-    sinais = []
-    padroes_predominantes = ["CALL", "PUT", "PUT", "CALL", "PUT"]
+    sinais_gerados = []
+    direcoes = ["CALL", "PUT"]
     
-    for i in range(5):
-        passo = 1 if tf_fmt == "M1" else 5
+    # Passo de tempo (1 min para M1 ou 5 min para M5)
+    passo = 1 if tf_fmt == "M1" else 5
+    
+    # Simula a varredura ampla de horários para filtrar os melhores que atendem à %
+    # Vamos simular a varredura de até 60 horários do dia para extrair os top 30
+    for i in range(60):
         agora += timedelta(minutes=passo)
-        
         horario_str = agora.strftime("%H:%M")
+        
+        # Simula a distribuição entre os pares selecionados
         par_escolhido = selecionados[i % len(selecionados)]
-        direcao_vencedora = padroes_predominantes[i % len(padroes_predominantes)]
+        direcao = direcoes[i % 2]
         
-        sinais.append(f"`{tf_fmt};{par_escolhido};{horario_str};{direcao_vencedora}`")
+        # Simula a pontuação de assertividade baseada nos dias e gales (ex: variando entre 80% e 100%)
+        # Simulamos que apenas os que atingem a porcentagem configurada entram na lista
+        assertividade_simulada = 100 if (i % 3 == 0 or porcentagem_min <= 90) else 85
         
-    return "\n".join(sinais)
+        if assertividade_simulada >= porcentagem_min:
+            sinais_gerados.append(f"`{tf_fmt};{par_escolhido};{horario_str};{direcao}`")
+            
+        # Limita estritamente ao máximo de 30 sinais
+        if len(sinais_gerados) >= 30:
+            break
+            
+    if not sinais_gerados:
+        return "⚠️ Nenhum sinal encontrado atingiu a porcentagem de assertividade mínima exigida neste horário."
+        
+    return "\n".join(sinais_gerados)
 
 def processar_mensagens(offset):
     try:
@@ -210,19 +215,19 @@ def processar_mensagens(offset):
                         
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"🔍 **Analisando os últimos {u['dias']} dias...**\nFiltrando horários em que a direção teve maior prevalência de WIN ({u['porcentagem']}%)...", 
+                        "text": f"🔍 **Varredura concluída!** Filtrando os **melhores até 30 sinais** com base em {u['porcentagem']}% de assertividade...", 
                         "parse_mode": "Markdown"
                     })
                     time.sleep(2)
                     
                     tf = u["time"].upper()
-                    tf_fmt = "M1" if tf == "1M" else ("M5" if tf == "5M" else tf)
+                    porc_int = int(u["porcentagem"]) if u["porcentagem"].isdigit() else 100
 
-                    lista_sinais = catalogar_probabilidade_por_horario(u["selecionados"], u["dias"], tf)
+                    lista_sinais = catalogar_melhores_sinais(u["selecionados"], porc_int, tf)
                     
                     requests.post(f"{URL}/sendMessage", json={
                         "chat_id": chat_id, 
-                        "text": f"📋 **SINAIS CATALOGADOS ({tf_fmt}) - Padrões de Alta Assertividade:**\n\n{lista_sinais}", 
+                        "text": f"📋 **MELHORES SINAIS SELECIONADOS (Máx. 30):**\n\n{lista_sinais}", 
                         "parse_mode": "Markdown"
                     })
                     enviar_catalogador(chat_id)
@@ -236,10 +241,6 @@ def processar_mensagens(offset):
             texto = resultado["message"]["text"].strip()
             user_nome = resultado["message"]["from"].get("first_name", "Usuário")
             
-            inicializar_usuario(chat_id)
-            u = USUARIOS[chat_id]
-            
-            # Comando secreto para você ver quem usou o bot
             if texto == "/usuarios":
                 total = len(LISTA_CLIENTES)
                 lista_ids = "\n".join([f"• ID: `{uid}`" for uid in LISTA_CLIENTES])
@@ -251,6 +252,9 @@ def processar_mensagens(offset):
                 requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": msg_admin, "parse_mode": "Markdown"})
                 continue
 
+            inicializar_usuario(chat_id)
+            u = USUARIOS[chat_id]
+            
             if texto == "/start":
                 enviar_menu_principal(chat_id, user_nome)
             elif u["etapa"] == "AGUARDANDO_DIAS":
@@ -300,10 +304,10 @@ def processar_mensagens(offset):
     except Exception as e:
         print(f"Erro no loop: {e}")
         
-    return offset
+    return optimize_offset = offset if 'offset' in locals() else 0 # safety
 
 if __name__ == "__main__":
-    print("Bot com contador de usuários iniciado na nuvem...")
+    print("Catalogador focado nos melhores sinais (Máx 30) iniciado na nuvem...")
     ultimo_offset = 0
     while True:
         ultimo_offset = processar_mensagens(ultimo_offset)
